@@ -14,4 +14,5 @@
 #include "prismx/d3d11.hpp"
 #include "prismx/d3d12.hpp"
 #include "prismx/shader_vm.hpp"
+#include "prismx/d3dcompiler.hpp"
 #include "prismx/vulkan.hpp"
