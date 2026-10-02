@@ -1,0 +1,17 @@
+// ============================================================================
+// PrismX: Sovereign Graphics Ecosystem
+// 
+// Unified Header for DXGI, Direct3D 11, Direct3D 12, ShaderVM, and Vulkan 1.3
+// 
+// Clean-Room Implementation in ISO C++23. Zero External Dependencies.
+// Tribute to Dave Cutler's 1988 DEC PRISM Architecture.
+// ============================================================================
+
+#pragma once
+
+#include "prismx/types.hpp"
+#include "prismx/dxgi.hpp"
+#include "prismx/d3d11.hpp"
+#include "prismx/d3d12.hpp"
+#include "prismx/shader_vm.hpp"
+#include "prismx/vulkan.hpp"
