@@ -1,5 +1,9 @@
 # PrismX: Sovereign Graphics Architecture
 
+<p align="center">
+  <img src="docs/prismx_icon_512.png" width="180" height="180" alt="PrismX Logo" />
+</p>
+
 [![PrismX CI](https://github.com/MicaNT-Kernel/PrismX/actions/workflows/ci.yml/badge.svg)](https://github.com/MicaNT-Kernel/PrismX/actions/workflows/ci.yml)
 [![Standard](https://img.shields.io/badge/C%2B%2B-23-blue.svg?logo=cplusplus)](https://en.cppreference.com/w/cpp/23)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
