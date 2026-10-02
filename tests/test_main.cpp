@@ -381,6 +381,108 @@ int Test_Vulkan13_ICD_Driver() {
     return 0;
 }
 
+int Test_DirectX_Audio_And_Input() {
+    PRISMX_TEST("Test_DirectX_Audio_And_Input")
+        using namespace prismx::audio;
+        using namespace prismx::hid;
+
+        // 1. Audio Engine and Mastering Voice
+        ComPtr<IXAudio2> audioEngine;
+        int32_t hr = XAudio2Create(audioEngine.ReleaseAndGetAddressOf(), 0, 0);
+        PRISMX_ASSERT(hr == 0);
+        PRISMX_ASSERT(audioEngine.Get() != nullptr);
+
+        IXAudio2MasteringVoice* masteringVoice = nullptr;
+        hr = audioEngine->CreateMasteringVoice(&masteringVoice, 2, 48000, 0);
+        PRISMX_ASSERT(hr == 0 && masteringVoice != nullptr);
+
+        uint32_t channelMask = 0;
+        masteringVoice->GetChannelMask(&channelMask);
+        PRISMX_ASSERT(channelMask == 0x3);
+
+        // 2. Source Voice & Procedural Synthesis
+        WAVEFORMATEX fmt{};
+        fmt.wFormatTag = WAVE_FORMAT_PCM;
+        fmt.nChannels = 2;
+        fmt.nSamplesPerSec = 48000;
+        fmt.wBitsPerSample = 16;
+        fmt.nBlockAlign = 4;
+        fmt.nAvgBytesPerSec = 48000 * 4;
+
+        IXAudio2SourceVoice* sourceVoice = nullptr;
+        hr = audioEngine->CreateSourceVoice(&sourceVoice, &fmt);
+        PRISMX_ASSERT(hr == 0 && sourceVoice != nullptr);
+
+        std::vector<uint8_t> monoTone = PrismAudioEngineImpl::SynthesizeTone(
+            PrismAudioEngineImpl::ToneType::Sine, 440.0f, 0.05f, 48000, 0.8f
+        );
+        PRISMX_ASSERT(!monoTone.empty());
+
+        size_t samples = monoTone.size() / sizeof(int16_t);
+        std::vector<int16_t> stereoTone(samples * 2);
+        const int16_t* pMono = reinterpret_cast<const int16_t*>(monoTone.data());
+        for (size_t i = 0; i < samples; ++i) {
+            stereoTone[i * 2 + 0] = pMono[i];
+            stereoTone[i * 2 + 1] = pMono[i];
+        }
+
+        XAUDIO2_BUFFER buf{};
+        buf.AudioBytes = static_cast<uint32_t>(stereoTone.size() * sizeof(int16_t));
+        buf.pAudioData = reinterpret_cast<const uint8_t*>(stereoTone.data());
+
+        hr = sourceVoice->SubmitSourceBuffer(&buf);
+        PRISMX_ASSERT(hr == 0);
+        hr = sourceVoice->Start(0);
+        PRISMX_ASSERT(hr == 0);
+
+        // Mixing cycle
+        auto* rawEngine = static_cast<PrismAudioEngineImpl*>(audioEngine.Get());
+        std::vector<float> mixedAudio;
+        rawEngine->ProcessMixingCycle(480, mixedAudio);
+        PRISMX_ASSERT(mixedAudio.size() == 960);
+
+        float maxAmp = 0.0f;
+        for (float s : mixedAudio) {
+            maxAmp = std::max(maxAmp, std::abs(s));
+        }
+        PRISMX_ASSERT(maxAmp > 0.1f);
+
+        // 3. 3D Spatial Calculation
+        AudioListener listener{};
+        AudioEmitter emitterNear{}, emitterFar{};
+        emitterNear.position = { 0.0f, 0.0f, 5.0f };
+        emitterFar.position = { 0.0f, 0.0f, 40.0f };
+
+        float volNear = 0.0f, panLNear = 0.0f, panRNear = 0.0f;
+        float volFar = 0.0f, panLFar = 0.0f, panRFar = 0.0f;
+        PrismAudioEngineImpl::Calculate3DSpatial(listener, emitterNear, volNear, panLNear, panRNear);
+        PrismAudioEngineImpl::Calculate3DSpatial(listener, emitterFar, volFar, panLFar, panRFar);
+        PRISMX_ASSERT(volNear > volFar);
+
+        // 4. Controller Input
+        ControllerManager::get().SetSlotConnected(1, true);
+        XINPUT_GAMEPAD simPad{};
+        simPad.wButtons = XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_START;
+        simPad.bLeftTrigger = 200;
+        ControllerManager::get().SetSlotState(1, simPad);
+
+        XINPUT_STATE padState{};
+        uint32_t err = XInputGetState(1, &padState);
+        PRISMX_ASSERT(err == ERROR_SUCCESS);
+        PRISMX_ASSERT(padState.Gamepad.wButtons == (XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_START));
+        PRISMX_ASSERT(padState.Gamepad.bLeftTrigger == 200);
+
+        // Deadzone normalization
+        float normX = 0.0f, normY = 0.0f;
+        ControllerManager::NormalizeThumbstick(3000, 3000, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, normX, normY);
+        PRISMX_ASSERT(normX == 0.0f && normY == 0.0f);
+
+        sourceVoice->DestroyVoice();
+        masteringVoice->DestroyVoice();
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -391,9 +493,11 @@ int main() {
     if (Test_Direct3D12_LowLevelPipeline() != 0) return 1;
     if (Test_PrismShaderVM_SIMD() != 0) return 1;
     if (Test_Vulkan13_ICD_Driver() != 0) return 1;
+    if (Test_DirectX_Audio_And_Input() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (5/5 PASS) \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (6/6 PASS) \n";
     std::cout << "========================================================\n";
     return 0;
 }
+

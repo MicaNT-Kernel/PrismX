@@ -16,3 +16,5 @@
 #include "prismx/shader_vm.hpp"
 #include "prismx/d3dcompiler.hpp"
 #include "prismx/vulkan.hpp"
+#include "prismx/audio.hpp"
+#include "prismx/xinput.hpp"
