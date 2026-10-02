@@ -16,6 +16,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "math.hpp"
 #include "dxgi.hpp"
 #include <vector>
 #include <memory>
@@ -300,148 +301,25 @@ static constexpr IID IID_ID3D11Device =
 // 3. 3D Mathematics & Matrix Engine (DirectXTK SimpleMath Parity)
 // ============================================================================
 
-struct Vector3 {
-    float x{ 0.0f };
-    float y{ 0.0f };
-    float z{ 0.0f };
-};
-
-struct Vector4 {
-    float x{ 0.0f };
-    float y{ 0.0f };
-    float z{ 0.0f };
-    float w{ 1.0f };
-};
-
+using Vector2 = prismx::math::Vector2;
+using Vector3 = prismx::math::Vector3;
+using Vector4 = prismx::math::Vector4;
 using Vec3 = Vector3;
 using Vec4 = Vector4;
 
-struct Matrix4x4 {
-    float m[4][4]{};
-
-    static Matrix4x4 Identity() noexcept {
-        Matrix4x4 mat{};
-        mat.m[0][0] = 1.0f;
-        mat.m[1][1] = 1.0f;
-        mat.m[2][2] = 1.0f;
-        mat.m[3][3] = 1.0f;
-        return mat;
-    }
-
-    static Matrix4x4 Translation(float x, float y, float z) noexcept {
-        Matrix4x4 mat = Identity();
-        mat.m[3][0] = x;
-        mat.m[3][1] = y;
-        mat.m[3][2] = z;
-        return mat;
-    }
-
-    static Matrix4x4 RotationX(float rad) noexcept {
-        Matrix4x4 mat = Identity();
-        float c = std::cos(rad);
-        float s = std::sin(rad);
-        mat.m[1][1] = c;
-        mat.m[1][2] = s;
-        mat.m[2][1] = -s;
-        mat.m[2][2] = c;
-        return mat;
-    }
-
-    static Matrix4x4 RotationY(float rad) noexcept {
-        Matrix4x4 mat = Identity();
-        float c = std::cos(rad);
-        float s = std::sin(rad);
-        mat.m[0][0] = c;
-        mat.m[0][2] = -s;
-        mat.m[2][0] = s;
-        mat.m[2][2] = c;
-        return mat;
-    }
-
-    static Matrix4x4 RotationZ(float rad) noexcept {
-        Matrix4x4 mat = Identity();
-        float c = std::cos(rad);
-        float s = std::sin(rad);
-        mat.m[0][0] = c;
-        mat.m[0][1] = s;
-        mat.m[1][0] = -s;
-        mat.m[1][1] = c;
-        return mat;
-    }
-
-    static Matrix4x4 Multiply(const Matrix4x4& a, const Matrix4x4& b) noexcept {
-        Matrix4x4 out{};
-        for (int r = 0; r < 4; ++r) {
-            for (int c = 0; c < 4; ++c) {
-                out.m[r][c] = a.m[r][0] * b.m[0][c] +
-                              a.m[r][1] * b.m[1][c] +
-                              a.m[r][2] * b.m[2][c] +
-                              a.m[r][3] * b.m[3][c];
-            }
-        }
-        return out;
-    }
-
-    static Matrix4x4 PerspectiveFovLH(float fovY, float aspect, float nearZ, float farZ) noexcept {
-        Matrix4x4 mat{};
-        float sinFov = std::sin(0.5f * fovY);
-        float cosFov = std::cos(0.5f * fovY);
-        float height = cosFov / sinFov;
-        float width = height / aspect;
-        float fRange = farZ / (farZ - nearZ);
-
-        mat.m[0][0] = width;
-        mat.m[1][1] = height;
-        mat.m[2][2] = fRange;
-        mat.m[2][3] = 1.0f;
-        mat.m[3][2] = -fRange * nearZ;
-        return mat;
-    }
-
-    static Matrix4x4 LookAtLH(const Vector3& eye, const Vector3& target, const Vector3& up) noexcept {
-        Vector3 zAxis{ target.x - eye.x, target.y - eye.y, target.z - eye.z };
-        float zLen = std::sqrt(zAxis.x * zAxis.x + zAxis.y * zAxis.y + zAxis.z * zAxis.z);
-        if (zLen > 1e-6f) { zAxis.x /= zLen; zAxis.y /= zLen; zAxis.z /= zLen; }
-
-        Vector3 xAxis{ up.y * zAxis.z - up.z * zAxis.y,
-                       up.z * zAxis.x - up.x * zAxis.z,
-                       up.x * zAxis.y - up.y * zAxis.x };
-        float xLen = std::sqrt(xAxis.x * xAxis.x + xAxis.y * xAxis.y + xAxis.z * xAxis.z);
-        if (xLen > 1e-6f) { xAxis.x /= xLen; xAxis.y /= xLen; xAxis.z /= xLen; }
-
-        Vector3 yAxis{ zAxis.y * xAxis.z - zAxis.z * xAxis.y,
-                       zAxis.z * xAxis.x - zAxis.x * xAxis.z,
-                       zAxis.x * xAxis.y - zAxis.y * xAxis.x };
-
-        Matrix4x4 mat = Identity();
-        mat.m[0][0] = xAxis.x; mat.m[0][1] = yAxis.x; mat.m[0][2] = zAxis.x;
-        mat.m[1][0] = xAxis.y; mat.m[1][1] = yAxis.y; mat.m[1][2] = zAxis.y;
-        mat.m[2][0] = xAxis.z; mat.m[2][1] = yAxis.z; mat.m[2][2] = zAxis.z;
-        mat.m[3][0] = -(xAxis.x * eye.x + xAxis.y * eye.y + xAxis.z * eye.z);
-        mat.m[3][1] = -(yAxis.x * eye.x + yAxis.y * eye.y + yAxis.z * eye.z);
-        mat.m[3][2] = -(zAxis.x * eye.x + zAxis.y * eye.y + zAxis.z * eye.z);
-        return mat;
-    }
-
-    Vector4 Transform(const Vector4& v) const noexcept {
-        return Vector4{
-            v.x * m[0][0] + v.y * m[1][0] + v.z * m[2][0] + v.w * m[3][0],
-            v.x * m[0][1] + v.y * m[1][1] + v.z * m[2][1] + v.w * m[3][1],
-            v.x * m[0][2] + v.y * m[1][2] + v.z * m[2][2] + v.w * m[3][2],
-            v.x * m[0][3] + v.y * m[1][3] + v.z * m[2][3] + v.w * m[3][3]
-        };
-    }
-};
-
+using Matrix = prismx::math::Matrix;
+using Matrix4x4 = prismx::math::Matrix;
 using Mat4x4 = Matrix4x4;
 
-inline Matrix4x4 MatrixMultiply(const Matrix4x4& a, const Matrix4x4& b) noexcept { return Matrix4x4::Multiply(a, b); }
-inline Matrix4x4 MatrixRotationX(float rad) noexcept { return Matrix4x4::RotationX(rad); }
-inline Matrix4x4 MatrixRotationY(float rad) noexcept { return Matrix4x4::RotationY(rad); }
-inline Matrix4x4 MatrixRotationZ(float rad) noexcept { return Matrix4x4::RotationZ(rad); }
-inline Matrix4x4 MatrixTranslation(float x, float y, float z) noexcept { return Matrix4x4::Translation(x, y, z); }
-inline Matrix4x4 MatrixPerspectiveFovLH(float fov, float aspect, float nearZ, float farZ) noexcept { return Matrix4x4::PerspectiveFovLH(fov, aspect, nearZ, farZ); }
-inline Matrix4x4 MatrixLookAtLH(const Vector3& eye, const Vector3& at, const Vector3& up) noexcept { return Matrix4x4::LookAtLH(eye, at, up); }
+using Color = prismx::math::Color;
+
+inline Matrix4x4 MatrixMultiply(const Matrix4x4& a, const Matrix4x4& b) noexcept { return a * b; }
+inline Matrix4x4 MatrixRotationX(float rad) noexcept { return Matrix4x4::CreateRotationX(rad); }
+inline Matrix4x4 MatrixRotationY(float rad) noexcept { return Matrix4x4::CreateRotationY(rad); }
+inline Matrix4x4 MatrixRotationZ(float rad) noexcept { return Matrix4x4::CreateRotationZ(rad); }
+inline Matrix4x4 MatrixTranslation(float x, float y, float z) noexcept { return Matrix4x4::CreateTranslation(x, y, z); }
+inline Matrix4x4 MatrixPerspectiveFovLH(float fov, float aspect, float nearZ, float farZ) noexcept { return Matrix4x4::CreatePerspectiveFovLH(fov, aspect, nearZ, farZ); }
+inline Matrix4x4 MatrixLookAtLH(const Vector3& eye, const Vector3& at, const Vector3& up) noexcept { return Matrix4x4::CreateLookAtLH(eye, at, up); }
 
 // ============================================================================
 // 4. Vertex Formats

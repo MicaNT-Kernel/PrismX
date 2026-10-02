@@ -483,6 +483,82 @@ int Test_DirectX_Audio_And_Input() {
     return 0;
 }
 
+int Test_3DMath_And_Transformations() {
+    PRISMX_TEST("Test_3DMath_And_Transformations")
+        using namespace prismx::math;
+
+        // 1. Vector Operations
+        Vector2 v2a(3.0f, 4.0f);
+        PRISMX_ASSERT(std::abs(v2a.Length() - 5.0f) < 0.0001f);
+        Vector2 v2Norm = v2a.Normalized();
+        PRISMX_ASSERT(std::abs(v2Norm.Length() - 1.0f) < 0.0001f);
+
+        Vector3 v3a(1.0f, 0.0f, 0.0f);
+        Vector3 v3b(0.0f, 1.0f, 0.0f);
+        Vector3 cross = v3a.Cross(v3b);
+        PRISMX_ASSERT(cross == Vector3::UnitZ);
+        PRISMX_ASSERT(std::abs(v3a.Dot(v3b)) < 0.0001f);
+
+        Vector3 lerped = Vector3::Lerp(Vector3(0.0f, 0.0f, 0.0f), Vector3(10.0f, 20.0f, 30.0f), 0.5f);
+        PRISMX_ASSERT(lerped.x == 5.0f && lerped.y == 10.0f && lerped.z == 15.0f);
+
+        // 2. Matrix Transformations: Translation, Scale, Rotation
+        Matrix matTrans = Matrix::CreateTranslation(10.0f, -5.0f, 25.0f);
+        Vector3 pt0(0.0f, 0.0f, 0.0f);
+        Vector3 transPt = matTrans.TransformCoord(pt0);
+        PRISMX_ASSERT(std::abs(transPt.x - 10.0f) < 0.0001f);
+        PRISMX_ASSERT(std::abs(transPt.y - (-5.0f)) < 0.0001f);
+        PRISMX_ASSERT(std::abs(transPt.z - 25.0f) < 0.0001f);
+
+        Matrix matScale = Matrix::CreateScale(2.0f, 3.0f, 4.0f);
+        Vector3 scaledPt = matScale.TransformCoord(Vector3(1.0f, 1.0f, 1.0f));
+        PRISMX_ASSERT(std::abs(scaledPt.x - 2.0f) < 0.0001f);
+        PRISMX_ASSERT(std::abs(scaledPt.y - 3.0f) < 0.0001f);
+        PRISMX_ASSERT(std::abs(scaledPt.z - 4.0f) < 0.0001f);
+
+        // 3. Left-Handed Camera LookAt Matrix
+        Vector3 eye(0.0f, 0.0f, -10.0f);
+        Vector3 target(0.0f, 0.0f, 0.0f);
+        Vector3 up(0.0f, 1.0f, 0.0f);
+        Matrix matView = Matrix::CreateLookAtLH(eye, target, up);
+
+        // In view space, target (0,0,0) should be at distance 10 along +Z forward
+        Vector3 viewTarget = matView.TransformCoord(target);
+        PRISMX_ASSERT(std::abs(viewTarget.x) < 0.0001f);
+        PRISMX_ASSERT(std::abs(viewTarget.y) < 0.0001f);
+        PRISMX_ASSERT(std::abs(viewTarget.z - 10.0f) < 0.0001f);
+
+        // 4. Left-Handed Perspective Field-of-View Projection Matrix
+        float fovY = std::numbers::pi_v<float> / 4.0f; // 45 degrees
+        float aspect = 16.0f / 9.0f;
+        float nearZ = 1.0f;
+        float farZ = 100.0f;
+        Matrix matProj = Matrix::CreatePerspectiveFovLH(fovY, aspect, nearZ, farZ);
+
+        // Verify DirectX nearZ (depth -> 0.0) and farZ (depth -> 1.0)
+        Vector3 pNear(0.0f, 0.0f, nearZ);
+        Vector3 pFar(0.0f, 0.0f, farZ);
+        Vector3 projNear = matProj.TransformCoord(pNear);
+        Vector3 projFar = matProj.TransformCoord(pFar);
+        PRISMX_ASSERT(std::abs(projNear.z) < 0.0001f);
+        PRISMX_ASSERT(std::abs(projFar.z - 1.0f) < 0.0001f);
+
+        // 5. Composite MVP Pipeline Matrix Multiplication
+        Matrix matWorld = Matrix::CreateRotationY(0.0f) * Matrix::CreateTranslation(0.0f, 0.0f, 50.0f);
+        Matrix matWVP = matWorld * matView * matProj;
+        Vector3 crystalVertex(0.0f, 0.0f, 0.0f);
+        Vector3 projectedCrystal = matWVP.TransformCoord(crystalVertex);
+        // Crystal should be projected into valid NDC depth [0, 1]
+        PRISMX_ASSERT(projectedCrystal.z >= 0.0f && projectedCrystal.z <= 1.0f);
+
+        // 6. Color Format Packing (BGRA8888)
+        Color cyan(0.0f, 1.0f, 1.0f, 1.0f);
+        uint32_t bgraCyan = cyan.ToBgra8888();
+        PRISMX_ASSERT(bgraCyan == 0xFF00FFFF);
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -494,9 +570,10 @@ int main() {
     if (Test_PrismShaderVM_SIMD() != 0) return 1;
     if (Test_Vulkan13_ICD_Driver() != 0) return 1;
     if (Test_DirectX_Audio_And_Input() != 0) return 1;
+    if (Test_3DMath_And_Transformations() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (6/6 PASS) \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (7/7 PASS) \n";
     std::cout << "========================================================\n";
     return 0;
 }

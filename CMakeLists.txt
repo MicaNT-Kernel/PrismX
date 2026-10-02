@@ -39,6 +39,9 @@ target_link_libraries(prismx_shader_vm_demo PRIVATE prismx)
 add_executable(prismx_vulkan_demo examples/vulkan_demo.cpp)
 target_link_libraries(prismx_vulkan_demo PRIVATE prismx)
 
+add_executable(prismx_multimedia_demo examples/multimedia_demo.cpp)
+target_link_libraries(prismx_multimedia_demo PRIVATE prismx)
+
 # Output binaries to bin/
 set_target_properties(
     prismx_tests
@@ -46,5 +49,6 @@ set_target_properties(
     prismx_d3d12_demo
     prismx_shader_vm_demo
     prismx_vulkan_demo
+    prismx_multimedia_demo
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )

@@ -10,6 +10,7 @@
 #pragma once
 
 #include "prismx/types.hpp"
+#include "prismx/math.hpp"
 #include "prismx/dxgi.hpp"
 #include "prismx/d3d11.hpp"
 #include "prismx/d3d12.hpp"
