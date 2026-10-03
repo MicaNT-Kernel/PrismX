@@ -12,6 +12,7 @@
 #include <cmath>
 #include <numbers>
 #include <iomanip>
+#include <fstream>
 
 using namespace prismx;
 using namespace prismx::math;
@@ -265,6 +266,52 @@ int main() {
     }
 
     std::cout << "\n[+] Animation loop completed successfully.\n";
+
+    // Export rendered framebuffer to BMP
+    auto* rtvImpl = static_cast<Prism3DRenderTargetViewImpl*>(rtv.Get());
+    if (rtvImpl && rtvImpl->GetSurface()) {
+        auto* surf = rtvImpl->GetSurface();
+        uint32_t w = surf->GetWidth();
+        uint32_t h = surf->GetHeight();
+        const uint8_t* rawPix = surf->GetRawData();
+
+        std::ofstream bmpFile("prismx_crystal_render.bmp", std::ios::binary);
+        if (bmpFile.is_open()) {
+            uint32_t rowPitch = w * 4;
+            uint32_t imageSize = rowPitch * h;
+            uint32_t fileSize = 54 + imageSize;
+
+            uint8_t bmpHeader[54] = {
+                'B', 'M',
+                static_cast<uint8_t>(fileSize & 0xFF), static_cast<uint8_t>((fileSize >> 8) & 0xFF),
+                static_cast<uint8_t>((fileSize >> 16) & 0xFF), static_cast<uint8_t>((fileSize >> 24) & 0xFF),
+                0, 0, 0, 0,
+                54, 0, 0, 0,
+                40, 0, 0, 0,
+                static_cast<uint8_t>(w & 0xFF), static_cast<uint8_t>((w >> 8) & 0xFF),
+                static_cast<uint8_t>((w >> 16) & 0xFF), static_cast<uint8_t>((w >> 24) & 0xFF),
+                static_cast<uint8_t>((-static_cast<int32_t>(h)) & 0xFF),
+                static_cast<uint8_t>(((-static_cast<int32_t>(h)) >> 8) & 0xFF),
+                static_cast<uint8_t>(((-static_cast<int32_t>(h)) >> 16) & 0xFF),
+                static_cast<uint8_t>(((-static_cast<int32_t>(h)) >> 24) & 0xFF),
+                1, 0,
+                32, 0,
+                0, 0, 0, 0,
+                static_cast<uint8_t>(imageSize & 0xFF), static_cast<uint8_t>((imageSize >> 8) & 0xFF),
+                static_cast<uint8_t>((imageSize >> 16) & 0xFF), static_cast<uint8_t>((imageSize >> 24) & 0xFF),
+                0x13, 0x0B, 0, 0,
+                0x13, 0x0B, 0, 0,
+                0, 0, 0, 0,
+                0, 0, 0, 0
+            };
+
+            bmpFile.write(reinterpret_cast<const char*>(bmpHeader), 54);
+            bmpFile.write(reinterpret_cast<const char*>(rawPix), imageSize);
+            bmpFile.close();
+            std::cout << "[+] Rendered 3D crystal framebuffer exported to: prismx_crystal_render.bmp\n";
+        }
+    }
+
     std::cout << "[+] Releasing multimedia resources...\n";
 
     sourceVoice->Stop(0, 0);
