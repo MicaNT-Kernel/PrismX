@@ -25,3 +25,4 @@
 #include "prismx/dxcore.hpp"
 #include "prismx/directml.hpp"
 #include "prismx/dcomp.hpp"
+#include "prismx/uicomposition.hpp"

@@ -40,6 +40,10 @@ struct Vector2 {
         float len = Length();
         return (len > 0.00001f) ? (*this / len) : Vector2{0.0f, 0.0f};
     }
+
+    constexpr bool operator==(const Vector2& o) const noexcept {
+        return x == o.x && y == o.y;
+    }
 };
 
 // ============================================================================

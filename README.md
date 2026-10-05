@@ -124,6 +124,13 @@ graph TD
 - **Parametric Animation Engine**: Smooth animation curves with cubic bezier polynomials, sinusoidal oscillations, repeats, and direct binding to visual properties.
 - **Composition Surfaces & Targets**: Low-latency rendering surfaces (`BeginDraw`/`EndDraw`) and HWND target binding with synchronized multi-target `Commit()` pipelines.
 
+### 11. PrismComposition & Modern Visual Layer Subsystem (`prismx/uicomposition.hpp`)
+- **Modern Scene-Graph Visual Layer**: `ICompositor`, `IVisual`, `IContainerVisual`, `ISpriteVisual`, `IVisualCollection`.
+- **Dual WinRT Compatibility Projection**: Clean-room implementation backing both `Windows.UI.Composition` and `Microsoft.UI.Composition` activation factories.
+- **High-Performance Composition Brushes**: `ICompositionColorBrush`, `ICompositionSurfaceBrush` (alignment & stretch modes), and `ICompositionEffectBrush` (Mica & Acrylic blur effects).
+- **KeyFrame & Expression Animations**: Smooth cubic hermite keyframe animations (`IScalarKeyFrameAnimation`, `IVector3KeyFrameAnimation`) and dynamic mathematical expression evaluation (`IExpressionAnimation`, e.g. `Lerp(A, B, Progress)`).
+- **Dynamic Property Sets**: Animated property maps (`ICompositionPropertySet`) for reactive UI bindings.
+
 ---
 
 ## Clean-Room Guarantees

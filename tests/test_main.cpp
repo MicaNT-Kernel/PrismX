@@ -1484,6 +1484,164 @@ int Test_DirectComposition_Subsystem() {
     return 0;
 }
 
+// ============================================================================
+// Test Suite 12: PrismComposition & Modern Visual Layer Subsystem
+// ============================================================================
+int Test_PrismComposition_VisualLayer_Subsystem() {
+    PRISMX_TEST("PrismComposition & Modern Visual Layer Subsystem")
+
+    using namespace prismx::composition;
+
+    // ------------------------------------------------------------------------
+    // Step 1: Activation Factory Verification (Dual Windows & Microsoft Class IDs)
+    // ------------------------------------------------------------------------
+    ComPtr<IActivationFactory> factoryWin;
+    HRESULT hr = PrismGetActivationFactory(L"Windows.UI.Composition.Compositor", factoryWin.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(factoryWin.Get() != nullptr);
+
+    ComPtr<IActivationFactory> factoryMs;
+    hr = PrismGetActivationFactory(L"Microsoft.UI.Composition.Compositor", factoryMs.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(factoryMs.Get() != nullptr);
+
+    // ------------------------------------------------------------------------
+    // Step 2: Compositor Activation & Interface Query
+    // ------------------------------------------------------------------------
+    ComPtr<IInspectable> inspectable;
+    hr = factoryWin->ActivateInstance(inspectable.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(inspectable.Get() != nullptr);
+
+    ComPtr<ICompositor> compositor;
+    hr = inspectable->QueryInterface(IID_ICompositor, compositor.PutVoid());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(compositor.Get() != nullptr);
+
+    // ------------------------------------------------------------------------
+    // Step 3: Visual Tree Hierarchy (ContainerVisual & SpriteVisual)
+    // ------------------------------------------------------------------------
+    ComPtr<IContainerVisual> rootVisual;
+    hr = compositor->CreateContainerVisual(rootVisual.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    ComPtr<ISpriteVisual> cardVisual;
+    hr = compositor->CreateSpriteVisual(cardVisual.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    cardVisual->SetOffset({ 100.0f, 150.0f, 0.0f });
+    cardVisual->SetSize({ 640.0f, 480.0f });
+    cardVisual->SetScale({ 1.05f, 1.05f, 1.0f });
+    cardVisual->SetOpacity(0.92f);
+    cardVisual->SetRotationAngle(0.785398f); // 45 degrees in radians
+
+    PRISMX_ASSERT(cardVisual->GetOffset() == Vector3(100.0f, 150.0f, 0.0f));
+    PRISMX_ASSERT(cardVisual->GetSize() == Vector2(640.0f, 480.0f));
+    PRISMX_ASSERT(cardVisual->GetScale() == Vector3(1.05f, 1.05f, 1.0f));
+    PRISMX_ASSERT(std::abs(cardVisual->GetOpacity() - 0.92f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(cardVisual->GetRotationAngle() - 0.785398f) < 1e-4f);
+
+    ComPtr<IVisualCollection> children;
+    hr = rootVisual->GetChildren(children.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(children->GetCount() == 0);
+
+    hr = children->InsertAtTop(cardVisual.Get());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(children->GetCount() == 1);
+    PRISMX_ASSERT(children->GetAt(0) == cardVisual.Get());
+    PRISMX_ASSERT(cardVisual->GetParent() == rootVisual.Get());
+
+    // ------------------------------------------------------------------------
+    // Step 4: Composition Brushes (ColorBrush, SurfaceBrush, EffectBrush)
+    // ------------------------------------------------------------------------
+    CompositionColor acrylicMica{ 255, 30, 40, 55 };
+    ComPtr<ICompositionColorBrush> colorBrush;
+    hr = compositor->CreateColorBrushWithColor(acrylicMica, colorBrush.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(colorBrush->GetColor() == acrylicMica);
+
+    hr = cardVisual->SetBrush(colorBrush.Get());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(cardVisual->GetBrush() == colorBrush.Get());
+
+    ComPtr<ICompositionSurfaceBrush> surfaceBrush;
+    hr = compositor->CreateSurfaceBrush(surfaceBrush.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    surfaceBrush->SetStretch(CompositionStretch::UniformToFill);
+    surfaceBrush->SetHorizontalAlignmentRatio(0.75f);
+    PRISMX_ASSERT(surfaceBrush->GetStretch() == CompositionStretch::UniformToFill);
+    PRISMX_ASSERT(std::abs(surfaceBrush->GetHorizontalAlignmentRatio() - 0.75f) < 1e-4f);
+
+    ComPtr<ICompositionEffectBrush> blurEffectBrush;
+    hr = compositor->CreateEffectBrush(L"AcrylicBlurFilter", blurEffectBrush.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(blurEffectBrush->GetEffectName() == L"AcrylicBlurFilter");
+    blurEffectBrush->SetSourceParameter(L"SourceBackdrop", colorBrush.Get());
+    PRISMX_ASSERT(blurEffectBrush->GetSourceParameter(L"SourceBackdrop") == colorBrush.Get());
+
+    // ------------------------------------------------------------------------
+    // Step 5: KeyFrame Animations (Scalar & Vector3)
+    // ------------------------------------------------------------------------
+    ComPtr<IScalarKeyFrameAnimation> scalarAnim;
+    hr = compositor->CreateScalarKeyFrameAnimation(scalarAnim.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    scalarAnim->SetDuration(2.5f);
+    scalarAnim->InsertKeyFrame(0.0f, 0.0f);
+    scalarAnim->InsertKeyFrame(0.5f, 50.0f);
+    scalarAnim->InsertKeyFrame(1.0f, 100.0f);
+
+    PRISMX_ASSERT(std::abs(scalarAnim->GetDuration() - 2.5f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(scalarAnim->Evaluate(0.0f) - 0.0f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(scalarAnim->Evaluate(0.5f) - 50.0f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(scalarAnim->Evaluate(1.0f) - 100.0f) < 1e-4f);
+
+    ComPtr<IVector3KeyFrameAnimation> vecAnim;
+    hr = compositor->CreateVector3KeyFrameAnimation(vecAnim.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    vecAnim->InsertKeyFrame(0.0f, { 0.0f, 0.0f, 0.0f });
+    vecAnim->InsertKeyFrame(1.0f, { 10.0f, 20.0f, 30.0f });
+    Vector3 midVec = vecAnim->Evaluate(0.5f);
+    PRISMX_ASSERT(std::abs(midVec.x - 5.0f) < 1e-3f);
+    PRISMX_ASSERT(std::abs(midVec.y - 10.0f) < 1e-3f);
+    PRISMX_ASSERT(std::abs(midVec.z - 15.0f) < 1e-3f);
+
+    // ------------------------------------------------------------------------
+    // Step 6: Dynamic Expression Animations
+    // ------------------------------------------------------------------------
+    ComPtr<IExpressionAnimation> exprAnim;
+    hr = compositor->CreateExpressionAnimationWithExpression(L"Lerp(A, B, Progress)", exprAnim.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    exprAnim->SetScalarParameter(L"A", 100.0f);
+    exprAnim->SetScalarParameter(L"B", 300.0f);
+    exprAnim->SetScalarParameter(L"Progress", 0.25f);
+    float exprResult = exprAnim->EvaluateScalar();
+    // 100.0 + (300.0 - 100.0) * 0.25 = 150.0
+    PRISMX_ASSERT(std::abs(exprResult - 150.0f) < 1e-4f);
+
+    // ------------------------------------------------------------------------
+    // Step 7: Composition Property Set
+    // ------------------------------------------------------------------------
+    ComPtr<ICompositionPropertySet> propSet;
+    hr = compositor->CreatePropertySet(propSet.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    propSet->InsertScalar(L"CornerRadius", 8.0f);
+    propSet->InsertVector3(L"PointerPosition", { 120.0f, 85.0f, 0.0f });
+
+    float readRadius = 0.0f;
+    hr = propSet->TryGetScalar(L"CornerRadius", &readRadius);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(std::abs(readRadius - 8.0f) < 1e-4f);
+
+    Vector3 readPointer{};
+    hr = propSet->TryGetVector3(L"PointerPosition", &readPointer);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(readPointer == Vector3(120.0f, 85.0f, 0.0f));
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -1500,9 +1658,10 @@ int main() {
     if (Test_DirectStorage_Subsystem() != 0) return 1;
     if (Test_DirectML_And_DXCore_Subsystem() != 0) return 1;
     if (Test_DirectComposition_Subsystem() != 0) return 1;
+    if (Test_PrismComposition_VisualLayer_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (11/11)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (12/12)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
