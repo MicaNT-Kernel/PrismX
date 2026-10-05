@@ -19,3 +19,5 @@
 #include "prismx/vulkan.hpp"
 #include "prismx/audio.hpp"
 #include "prismx/xinput.hpp"
+#include "prismx/d3d12raytracing.hpp"
+#include "prismx/dxr.hpp"

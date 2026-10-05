@@ -559,6 +559,132 @@ int Test_3DMath_And_Transformations() {
     return 0;
 }
 
+int Test_DirectX_Raytracing_And_MeshShaders() {
+    PRISMX_TEST("Test_DirectX_Raytracing_And_MeshShaders")
+        // 1. Create DXR Raytracing Device (Tier 1.1 / FL 12_2)
+        ComPtr<ID3D12Device5> device5;
+        HRESULT hr = D3D12CreateRaytracingDevice(
+            nullptr,
+            D3D_FEATURE_LEVEL_12_2,
+            IID_ID3D12Device5,
+            device5.PutVoid()
+        );
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(device5.Get() != nullptr);
+
+        // 2. Feature Queries: DXR Tier 1.1 & Mesh Shader Tier 1
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 opts5{};
+        hr = device5->CheckFeatureSupport(27, &opts5, sizeof(opts5));
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(opts5.RaytracingTier == D3D12_RAYTRACING_TIER_1_1);
+
+        D3D12_FEATURE_DATA_D3D12_OPTIONS7 opts7{};
+        hr = device5->CheckFeatureSupport(32, &opts7, sizeof(opts7));
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(opts7.MeshShaderTier == D3D12_MESH_SHADER_TIER_1);
+
+        // 3. Acceleration Structure Prebuild Queries (BLAS & TLAS)
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS blasInputs{};
+        blasInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        blasInputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        blasInputs.NumDescs = 64; // 64 Triangles
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO blasPrebuild{};
+        device5->GetRaytracingAccelerationStructurePrebuildInfo(&blasInputs, &blasPrebuild);
+        PRISMX_ASSERT(blasPrebuild.ResultDataMaxSizeInBytes > 0);
+        PRISMX_ASSERT(blasPrebuild.ScratchDataSizeInBytes > 0);
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlasInputs{};
+        tlasInputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        tlasInputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        tlasInputs.NumDescs = 16; // 16 Instances
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO tlasPrebuild{};
+        device5->GetRaytracingAccelerationStructurePrebuildInfo(&tlasInputs, &tlasPrebuild);
+        PRISMX_ASSERT(tlasPrebuild.ResultDataMaxSizeInBytes > 0);
+        PRISMX_ASSERT(tlasPrebuild.ScratchDataSizeInBytes > 0);
+
+        // 4. Command Allocator and Command List 4/6
+        ComPtr<ID3D12CommandAllocator> alloc;
+        hr = device5->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_ID3D12CommandAllocator, alloc.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<ID3D12GraphicsCommandList4> cmdList4;
+        hr = device5->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc.Get(), nullptr, IID_ID3D12GraphicsCommandList4, cmdList4.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(cmdList4.Get() != nullptr);
+
+        ComPtr<ID3D12GraphicsCommandList6> cmdList6;
+        hr = cmdList4->QueryInterface(IID_ID3D12GraphicsCommandList6, cmdList6.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(cmdList6.Get() != nullptr);
+
+        // 5. Build Acceleration Structures
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC blasDesc{};
+        blasDesc.Inputs = blasInputs;
+        blasDesc.DestAccelerationStructureData = 0x10000;
+        cmdList4->BuildRaytracingAccelerationStructure(&blasDesc, 0, nullptr);
+
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC tlasDesc{};
+        tlasDesc.Inputs = tlasInputs;
+        tlasDesc.DestAccelerationStructureData = 0x20000;
+        cmdList4->BuildRaytracingAccelerationStructure(&tlasDesc, 0, nullptr);
+
+        auto* pCmdImpl = static_cast<Prism3D12GraphicsCommandListRaytracingImpl*>(cmdList4.Get());
+        PRISMX_ASSERT(pCmdImpl->getBlasBuilds() == 1);
+        PRISMX_ASSERT(pCmdImpl->getTlasBuilds() == 1);
+
+        // 6. Raytracing State Object & Shader Identifier Inspection
+        D3D12_HIT_GROUP_DESC hitGroup{};
+        hitGroup.HitGroupExport = L"HitGroupAlpha";
+        hitGroup.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+        hitGroup.ClosestHitShaderImport = L"ClosestHitMain";
+
+        D3D12_RAYTRACING_PIPELINE_CONFIG pipeCfg{};
+        pipeCfg.MaxTraceRecursionDepth = 4;
+
+        D3D12_STATE_SUBOBJECT subobjects[2]{};
+        subobjects[0].Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
+        subobjects[0].pDesc = &hitGroup;
+        subobjects[1].Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
+        subobjects[1].pDesc = &pipeCfg;
+
+        D3D12_STATE_OBJECT_DESC soDesc{};
+        soDesc.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+        soDesc.NumSubobjects = 2;
+        soDesc.pSubobjects = subobjects;
+
+        ComPtr<ID3D12StateObject> stateObject;
+        hr = device5->CreateStateObject(&soDesc, IID_ID3D12StateObject, stateObject.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<ID3D12StateObjectProperties> props;
+        hr = stateObject->QueryInterface(IID_ID3D12StateObjectProperties, props.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        void* pHitId = props->GetShaderIdentifier(L"HitGroupAlpha");
+        PRISMX_ASSERT(pHitId != nullptr);
+
+        props->SetPipelineStackSize(16384);
+        PRISMX_ASSERT(props->GetPipelineStackSize() == 16384);
+
+        // 7. DispatchRays Execution & Möller-Trumbore Ray Intersections
+        cmdList4->SetPipelineState1(stateObject.Get());
+
+        D3D12_DISPATCH_RAYS_DESC dispatchDesc{};
+        dispatchDesc.Width = 32;
+        dispatchDesc.Height = 32;
+        dispatchDesc.Depth = 1;
+        cmdList4->DispatchRays(&dispatchDesc);
+        PRISMX_ASSERT(pCmdImpl->getRaysDispatched() == 1024);
+        PRISMX_ASSERT(pCmdImpl->getRaysHit() > 0);
+
+        // 8. DispatchMesh Amplification Pipeline
+        cmdList6->DispatchMesh(8, 2, 1);
+        PRISMX_ASSERT(pCmdImpl->getMeshDispatches() == 1);
+        PRISMX_ASSERT(pCmdImpl->getMeshAmplifiedPrimitives() == 1024);
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -571,9 +697,10 @@ int main() {
     if (Test_Vulkan13_ICD_Driver() != 0) return 1;
     if (Test_DirectX_Audio_And_Input() != 0) return 1;
     if (Test_3DMath_And_Transformations() != 0) return 1;
+    if (Test_DirectX_Raytracing_And_MeshShaders() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (7/7 PASS) \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (8/8 PASS) \n";
     std::cout << "========================================================\n";
     return 0;
 }

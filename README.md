@@ -87,6 +87,13 @@ graph TD
 - **Core Entities**: `VkInstance`, `VkPhysicalDevice`, `VkDevice`, `VkQueue`, `VkCommandBuffer`, `VkRenderPass`, `VkFramebuffer`, `VkSwapchainKHR`.
 - **PrismVK Driver**: Sovereign software graphics driver implementing physical device properties, memory types, and command queue execution.
 
+### 6. DirectX 12 Raytracing (DXR) & Mesh Shaders (`prismx/d3d12raytracing.hpp`, `prismx/dxr.hpp`)
+- **DirectX 12 Ultimate Parity**: `ID3D12Device5`, `ID3D12GraphicsCommandList4`, `ID3D12GraphicsCommandList6`, `ID3D12StateObject`, `ID3D12StateObjectProperties`.
+- **Hardware Tiers**: Full DXR Tier 1.1 (`D3D12_RAYTRACING_TIER_1_1`) and Mesh Shader Tier 1 (`D3D12_MESH_SHADER_TIER_1`) feature queries.
+- **Acceleration Structures**: Top-Level (TLAS) and Bottom-Level (BLAS) prebuild size computation and hardware/software construction.
+- **Intersection Engine**: Clean-room Möller-Trumbore ray-triangle intersection solver simulating primary rays via `DispatchRays`.
+- **Mesh Shader Amplification**: Next-generation geometry pipeline amplifying threadgroups into meshlet primitives via `DispatchMesh`.
+
 ---
 
 ## Clean-Room Guarantees
