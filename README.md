@@ -151,6 +151,20 @@ graph TD
   - Calibrated non-linear pressure curves (Linear, Soft, Hard, Sigmoid) with velocity-modulated stroke width.
   - Real-time tessellation into GPU triangle strips ready for Direct3D 11/12 vertex buffers or DirectComposition surfaces.
 
+### 14. Sovereign 2D Vector & TrueType/OpenType Font Tessellation Subsystem (`prismx/vector_font.hpp`)
+- **High-Precision 2D Vector Geometry**: `Point2D`, `Rect2D`, and affine `Matrix3x2F` (translation, rotation around center, non-uniform scaling, inversion, point transformation).
+- **W3C SVG 1.1 Path Syntax Parser**: Parses complex `d="..."` path strings supporting `M/m`, `L/l`, `H/h`, `V/v`, `C/c`, `S/s`, `Q/q`, `T/t`, `A/a`, and `Z/z` commands with compact float tokenization.
+- **Adaptive Curve Subdivision & Arc Parameterization**: De Casteljau subdivision for Quadratic and Cubic Bézier curves based on flatness tolerances, plus center-parameterized elliptical arc discretization.
+- **Robust Ear-Clipping Triangulation Engine**:
+  - High-performance ear-clipping triangulation for simple and complex polygons.
+  - Hole-merging bridge edge insertion transforming multi-contour polygons with inner holes into single simple polygons.
+  - Collinear vertex pruning and positive-cross fallback ensuring robust triangulation without degenerate vertex stalls.
+- **Dynamic Stroke Expansion**: Polyline stroke expansion with configurable stroke widths, line joins (`Miter`, `Bevel`, `Round`), line caps (`Flat`, `Square`, `Round`), and miter limits.
+- **Built-in Sovereign Vector Typeface**: Zero-dependency, in-memory geometric font engine synthesizing vector glyphs for ASCII 32–126 with precise typographic metrics (Ascender: 800, Descender: -200, EmSize: 1000).
+- **Signed Distance Field (SDF / MSDF) Rasterizer**: Computes signed Euclidean distance fields from vector paths into 32-bit RGBA distance maps for infinite-resolution GPU text rendering.
+- **Text Layout & Paragraph Formatting Engine**: Multi-line paragraph formatting with configurable font sizes, line heights, letter spacing, alignments (`Left`, `Center`, `Right`), and unified vertex/index mesh generation.
+- **Sovereign COM Interfaces**: `IPrismVectorPath`, `IPrismFont`, `IPrismTessellator`, `IPrismTextLayout` with factory functions (`CreatePrismVectorPath`, `CreatePrismFont`, `CreatePrismTessellator`, `CreatePrismTextLayout`).
+
 ---
 
 ## Clean-Room Guarantees

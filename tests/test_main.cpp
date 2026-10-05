@@ -1942,6 +1942,223 @@ int Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem() {
     return 0;
 }
 
+int Test_PrismVector_Font_Tessellation_Subsystem() {
+    PRISMX_TEST("Test_PrismVector_Font_Tessellation_Subsystem")
+        using namespace prismx::vector_font;
+
+        // ------------------------------------------------------------------------
+        // Step 1: 2D Geometry & Affine Transforms
+        // ------------------------------------------------------------------------
+        Point2D p1{ 10.0f, 20.0f };
+        Point2D p2{ 30.0f, 40.0f };
+        Point2D pSum = p1 + p2;
+        PRISMX_ASSERT(pSum.x == 40.0f && pSum.y == 60.0f);
+        PRISMX_ASSERT(Point2D::Distance(p1, p2) > 0.0f);
+        PRISMX_ASSERT(p1.Cross(p2) == 10.0f * 40.0f - 20.0f * 30.0f);
+
+        Rect2D rect{ 0.0f, 0.0f, 100.0f, 50.0f };
+        PRISMX_ASSERT(rect.Width() == 100.0f && rect.Height() == 50.0f);
+        PRISMX_ASSERT(rect.Contains({ 50.0f, 25.0f }));
+        PRISMX_ASSERT(!rect.Contains({ 150.0f, 25.0f }));
+
+        Matrix3x2F mTrans = Matrix3x2F::Translation(15.0f, 25.0f);
+        Point2D pTrans = mTrans.TransformPoint(p1);
+        PRISMX_ASSERT(pTrans.x == 25.0f && pTrans.y == 45.0f);
+
+        Matrix3x2F mScale = Matrix3x2F::Scale(2.0f, 3.0f);
+        Point2D pScale = mScale.TransformPoint(p1);
+        PRISMX_ASSERT(pScale.x == 20.0f && pScale.y == 60.0f);
+
+        Matrix3x2F mInv = mTrans.Invert();
+        Point2D pBack = mInv.TransformPoint(pTrans);
+        PRISMX_ASSERT(std::abs(pBack.x - p1.x) < 1e-4f && std::abs(pBack.y - p1.y) < 1e-4f);
+
+        // ------------------------------------------------------------------------
+        // Step 2: Vector Path Construction & De Casteljau Subdivision
+        // ------------------------------------------------------------------------
+        VectorPath path;
+        path.MoveTo({ 0.0f, 0.0f });
+        path.LineTo({ 100.0f, 0.0f });
+        path.QuadTo({ 150.0f, 50.0f }, { 100.0f, 100.0f });
+        path.CubicTo({ 80.0f, 120.0f }, { 20.0f, 120.0f }, { 0.0f, 100.0f });
+        path.Close();
+
+        Rect2D pathBounds = path.ComputeBounds();
+        PRISMX_ASSERT(pathBounds.left == 0.0f && pathBounds.top == 0.0f);
+        PRISMX_ASSERT(pathBounds.right >= 100.0f && pathBounds.bottom >= 100.0f);
+
+        auto contours = path.Flatten(0.25f);
+        PRISMX_ASSERT(!contours.empty());
+        PRISMX_ASSERT(contours[0].size() > 10); // Curves subdivided into multi-point polyline
+
+        // ------------------------------------------------------------------------
+        // Step 3: W3C SVG 1.1 Path String Parser
+        // ------------------------------------------------------------------------
+        VectorPath svgPath;
+        bool parsed = SvgPathParser::Parse("M 10 10 H 90 V 90 H 10 Z", svgPath);
+        PRISMX_ASSERT(parsed);
+        PRISMX_ASSERT(svgPath.GetCommands().size() == 5);
+        Rect2D svgBounds = svgPath.ComputeBounds();
+        PRISMX_ASSERT(svgBounds.left == 10.0f && svgBounds.top == 10.0f);
+        PRISMX_ASSERT(svgBounds.right == 90.0f && svgBounds.bottom == 90.0f);
+
+        // Complex SVG path with curves and negative numbers
+        VectorPath complexSvg;
+        parsed = SvgPathParser::Parse("M100,200 C100,100 250,100 250,200 S400,300 400,200 Q450,150 500,200 A25,25 0 0,1 550,200 Z", complexSvg);
+        PRISMX_ASSERT(parsed);
+        PRISMX_ASSERT(complexSvg.GetCommands().size() >= 5);
+
+        // ------------------------------------------------------------------------
+        // Step 4: Ear-Clipping Triangulation Engine (Simple Poly & Holes)
+        // ------------------------------------------------------------------------
+        // Simple CCW rectangle
+        std::vector<Point2D> rectPoly = {
+            { 0.0f, 0.0f }, { 100.0f, 0.0f }, { 100.0f, 50.0f }, { 0.0f, 50.0f }
+        };
+        TessellatedMesh rectMesh;
+        bool triOk = EarClippingTessellator::Triangulate(rectPoly, rectMesh);
+        PRISMX_ASSERT(triOk);
+        PRISMX_ASSERT(rectMesh.vertices.size() == 4);
+        PRISMX_ASSERT(rectMesh.indices.size() == 6); // 2 triangles = 6 indices
+
+        // Polygon with Hole (Square with nested inner hole)
+        std::vector<Point2D> outerSquare = {
+            { 0.0f, 0.0f }, { 200.0f, 0.0f }, { 200.0f, 200.0f }, { 0.0f, 200.0f }
+        };
+        std::vector<Point2D> innerHole = {
+            { 50.0f, 50.0f }, { 150.0f, 50.0f }, { 150.0f, 150.0f }, { 50.0f, 150.0f }
+        };
+        std::vector<Point2D> mergedPoly = EarClippingTessellator::MergeHoles(outerSquare, { innerHole });
+        PRISMX_ASSERT(mergedPoly.size() >= outerSquare.size() + innerHole.size());
+
+        TessellatedMesh holeMesh;
+        triOk = EarClippingTessellator::Triangulate(mergedPoly, holeMesh);
+        PRISMX_ASSERT(triOk);
+        PRISMX_ASSERT(holeMesh.indices.size() >= 18); // Triangulated annulus
+        PRISMX_ASSERT(holeMesh.indices.size() % 3 == 0);
+
+        // ------------------------------------------------------------------------
+        // Step 5: Stroke Expansion & Tessellation
+        // ------------------------------------------------------------------------
+        std::vector<Point2D> strokePoly = {
+            { 10.0f, 10.0f }, { 50.0f, 30.0f }, { 90.0f, 10.0f }, { 120.0f, 60.0f }
+        };
+        StrokeStyle strokeStyle{ 4.0f, LineJoin::Miter, LineCap::Flat, 4.0f };
+        TessellatedMesh strokeMesh;
+        bool strokeOk = StrokeTessellator::Tessellate(strokePoly, strokeStyle, strokeMesh);
+        PRISMX_ASSERT(strokeOk);
+        PRISMX_ASSERT(!strokeMesh.vertices.empty());
+        PRISMX_ASSERT(!strokeMesh.indices.empty());
+        PRISMX_ASSERT(strokeMesh.indices.size() % 6 == 0); // Quads of two triangles
+
+        // ------------------------------------------------------------------------
+        // Step 6: Built-in Sovereign Typeface & Glyph Outlines
+        // ------------------------------------------------------------------------
+        BuiltinTypeface font;
+        PRISMX_ASSERT(font.GetAscender() == 800.0f);
+        PRISMX_ASSERT(font.GetDescender() == -200.0f);
+        PRISMX_ASSERT(font.GetEmSize() == 1000.0f);
+
+        const auto& glyphA = font.GetGlyph('A');
+        PRISMX_ASSERT(glyphA.contours.size() == 2); // 'A' has outer contour + inner hole
+        PRISMX_ASSERT(glyphA.advanceWidth > 0.0f);
+
+        VectorPath pathA = glyphA.ToVectorPath();
+        Rect2D boundsA = pathA.ComputeBounds();
+        PRISMX_ASSERT(boundsA.Width() > 0.0f && boundsA.Height() > 0.0f);
+
+        const auto& glyphO = font.GetGlyph('O');
+        PRISMX_ASSERT(glyphO.contours.size() == 2); // 'O' has outer oval + inner oval
+
+        // ------------------------------------------------------------------------
+        // Step 7: Signed Distance Field (SDF) Rasterization
+        // ------------------------------------------------------------------------
+        VectorPath boxPath;
+        boxPath.MoveTo({ 20.0f, 20.0f });
+        boxPath.LineTo({ 80.0f, 20.0f });
+        boxPath.LineTo({ 80.0f, 80.0f });
+        boxPath.LineTo({ 20.0f, 80.0f });
+        boxPath.Close();
+
+        SdfBitmap sdf = SdfRasterizer::Generate(boxPath, 32, 32, 10.0f);
+        PRISMX_ASSERT(sdf.width == 32 && sdf.height == 32);
+        PRISMX_ASSERT(sdf.distances.size() == 32 * 32);
+        PRISMX_ASSERT(sdf.rgbaPixels.size() == 32 * 32 * 4);
+
+        // Center pixel (16, 16) is well inside the box -> negative distance, normalized > 0.5
+        size_t centerIdx = 16 * 32 + 16;
+        PRISMX_ASSERT(sdf.distances[centerIdx] < 0.0f);
+        PRISMX_ASSERT(sdf.rgbaPixels[centerIdx * 4 + 0] > 128);
+
+        // Corner pixel (2, 2) is outside the box -> positive distance, normalized < 0.5
+        size_t cornerIdx = 2 * 32 + 2;
+        PRISMX_ASSERT(sdf.distances[cornerIdx] > 0.0f);
+        PRISMX_ASSERT(sdf.rgbaPixels[cornerIdx * 4 + 0] < 128);
+
+        // ------------------------------------------------------------------------
+        // Step 8: Text Layout Engine
+        // ------------------------------------------------------------------------
+        TextLayoutEngine layout("PRISMX\nSOVEREIGN 2D", { 20.0f, 1.2f, 1.0f, TextAlignment::Left });
+        Rect2D textBounds = layout.ComputeBounds();
+        PRISMX_ASSERT(textBounds.Width() > 0.0f && textBounds.Height() > 0.0f);
+
+        TessellatedMesh textMesh = layout.Tessellate(0.2f, 0.7f, 1.0f, 1.0f);
+        PRISMX_ASSERT(!textMesh.vertices.empty());
+        PRISMX_ASSERT(!textMesh.indices.empty());
+        PRISMX_ASSERT(textMesh.indices.size() % 3 == 0);
+
+        // ------------------------------------------------------------------------
+        // Step 9: Sovereign COM Interfaces & Factory Lifecycle
+        // ------------------------------------------------------------------------
+        ComPtr<IPrismVectorPath> spPath;
+        HRESULT hr = CreatePrismVectorPath(spPath.ReleaseAndGetAddressOf());
+        PRISMX_ASSERT(SUCCEEDED(hr) && spPath.Get() != nullptr);
+
+        hr = spPath->ParseSvg("M 0 0 L 100 0 L 50 100 Z");
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        float l = 0, t = 0, r = 0, b = 0;
+        hr = spPath->GetBounds(&l, &t, &r, &b);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(l == 0.0f && t == 0.0f && r == 100.0f && b == 100.0f);
+
+        ComPtr<IPrismTessellator> spTess;
+        hr = CreatePrismTessellator(spTess.ReleaseAndGetAddressOf());
+        PRISMX_ASSERT(SUCCEEDED(hr) && spTess.Get() != nullptr);
+
+        TessellatedMesh comFillMesh;
+        hr = spTess->TessellateFill(spPath.Get(), 0.5f, &comFillMesh);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(comFillMesh.indices.size() == 3); // 1 triangle
+
+        ComPtr<IPrismFont> spFont;
+        hr = CreatePrismFont(spFont.ReleaseAndGetAddressOf());
+        PRISMX_ASSERT(SUCCEEDED(hr) && spFont.Get() != nullptr);
+        float asc = 0, desc = 0, gap = 0;
+        hr = spFont->GetMetrics(&asc, &desc, &gap);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(asc == 800.0f && desc == -200.0f);
+
+        ComPtr<IPrismTextLayout> spLayout;
+        hr = CreatePrismTextLayout("PRISMX GRAPHICS", spLayout.ReleaseAndGetAddressOf());
+        PRISMX_ASSERT(SUCCEEDED(hr) && spLayout.Get() != nullptr);
+        hr = spLayout->SetFontSize(32.0f);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        float tw = 0, th = 0;
+        hr = spLayout->GetBounds(&tw, &th);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(tw > 0.0f && th > 0.0f);
+
+        TessellatedMesh comTextMesh;
+        hr = spLayout->Tessellate(&comTextMesh);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(!comTextMesh.vertices.empty());
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -1961,9 +2178,10 @@ int main() {
     if (Test_PrismComposition_VisualLayer_Subsystem() != 0) return 1;
     if (Test_PrismColor_AdvancedColor_HDR_Subsystem() != 0) return 1;
     if (Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem() != 0) return 1;
+    if (Test_PrismVector_Font_Tessellation_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (14/14)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (15/15)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
