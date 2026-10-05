@@ -165,6 +165,21 @@ graph TD
 - **Text Layout & Paragraph Formatting Engine**: Multi-line paragraph formatting with configurable font sizes, line heights, letter spacing, alignments (`Left`, `Center`, `Right`), and unified vertex/index mesh generation.
 - **Sovereign COM Interfaces**: `IPrismVectorPath`, `IPrismFont`, `IPrismTessellator`, `IPrismTextLayout` with factory functions (`CreatePrismVectorPath`, `CreatePrismFont`, `CreatePrismTessellator`, `CreatePrismTextLayout`).
 
+### 15. Sovereign Stateful 2D Canvas & Vector Renderer (`prismx/canvas2d.hpp`)
+- **Immediate-Mode 2D Drawing Context**: High-performance stateful drawing context (`IPrismCanvas2D`) following modern Canvas/Skia immediate-mode rendering conventions.
+- **Transformation State Stack**: Full affine matrix transform stack with `Save()`, `Restore()`, `Translate()`, `Scale()`, `Rotate()`, `Transform()`, and `SetTransform()`.
+- **Comprehensive Porter-Duff & Advanced Blend Modes**: 16 alpha compositing and color blending modes including `SourceOver`, `DestinationOver`, `SourceIn`, `DestinationIn`, `SourceOut`, `DestinationOut`, `SourceAtop`, `DestinationAtop`, `XOR`, `Lighter`, `Multiply`, `Screen`, `Darken`, and `Lighten`.
+- **Multi-Stop Gradient & Pattern Shaders**:
+  - `LinearGradientBrush`: Arbitrary start/end points with normalized color stops and wrap modes (`Clamp`, `Repeat`, `Reflect`).
+  - `RadialGradientBrush`: Dual concentric/eccentric focal circles with smooth color interpolation.
+  - `ConicGradientBrush`: Angular sweep gradient around a focal center point.
+  - `PatternBrush`: 2D image texture sampling with bilinear filtering and wrapping modes.
+- **Vector Path Operations**: Full path geometry construction (`BeginPath`, `ClosePath`, `MoveTo`, `LineTo`, `QuadraticCurveTo`, `BezierCurveTo`, `Arc`, `Ellipse`, `Rect`, `RoundRect`) with `Fill()`, `Stroke()`, and `Clip()` path masking.
+- **Subpixel Anti-Aliased Software Rasterizer**: Barycentric triangle rasterizer with 2x2 subpixel supersampling coverage for smooth polygon and stroke rendering.
+- **Bitmap Resampling & Manipulation**: Fast bilinear image blitting (`DrawImage`), sub-rectangle source-destination scaling, and direct pixel buffer manipulation (`GetImageData`, `PutImageData`).
+- **Typography & Font Layout Integration**: Native vector text measurement (`MeasureText`) and anti-aliased text rendering (`FillText`, `StrokeText`) integrated with `BuiltinTypeface` and `TextLayoutEngine`.
+- **Sovereign COM Interfaces**: `IPrismBrush`, `IPrismCanvas2D`, `IPrismCanvasDevice` with factory entry points (`PrismCreateCanvas2D`, `PrismCreateCanvasDevice`).
+
 ---
 
 ## Clean-Room Guarantees

@@ -2159,6 +2159,185 @@ int Test_PrismVector_Font_Tessellation_Subsystem() {
     return 0;
 }
 
+// ============================================================================
+// Suite 16: Sovereign Stateful 2D Canvas & Vector Renderer Subsystem
+// ============================================================================
+int Test_PrismCanvas2D_Vector_Renderer() {
+    PRISMX_TEST("Test_PrismCanvas2D_Vector_Renderer");
+
+    using namespace prismx::canvas2d;
+
+    // 1. Color System & Conversions
+    CanvasColor red(1.0f, 0.0f, 0.0f, 1.0f);
+    CanvasColor green(0.0f, 1.0f, 0.0f, 1.0f);
+    CanvasColor blue(0.0f, 0.0f, 1.0f, 1.0f);
+    CanvasColor halfWhite(1.0f, 1.0f, 1.0f, 0.5f);
+
+    uint32_t rgbaRed = red.ToRgba8();
+    CanvasColor redRecovered = CanvasColor::FromRgba8(rgbaRed);
+    PRISMX_ASSERT(std::abs(redRecovered.r - 1.0f) < 0.01f);
+    PRISMX_ASSERT(std::abs(redRecovered.g - 0.0f) < 0.01f);
+    PRISMX_ASSERT(std::abs(redRecovered.b - 0.0f) < 0.01f);
+    PRISMX_ASSERT(std::abs(redRecovered.a - 1.0f) < 0.01f);
+
+    CanvasColor lerpColor = CanvasColor::Lerp(red, blue, 0.5f);
+    PRISMX_ASSERT(std::abs(lerpColor.r - 0.5f) < 0.01f);
+    PRISMX_ASSERT(std::abs(lerpColor.b - 0.5f) < 0.01f);
+
+    // Porter-Duff Blending
+    CanvasColor blendedOver = BlendColors(halfWhite, CanvasColor::Black(), BlendMode::SourceOver);
+    PRISMX_ASSERT(blendedOver.a > 0.99f);
+    PRISMX_ASSERT(blendedOver.r > 0.49f && blendedOver.r < 0.51f);
+
+    CanvasColor blendedAdd = BlendColors(red, green, BlendMode::Lighter);
+    PRISMX_ASSERT(blendedAdd.r > 0.99f && blendedAdd.g > 0.99f && blendedAdd.b < 0.01f);
+
+    // 2. Brush & Gradient Subsystem
+    SolidBrush solidYellow(CanvasColor::Yellow());
+    PRISMX_ASSERT(solidYellow.GetType() == BrushType::Solid);
+    CanvasColor sampledSolid = solidYellow.Sample(10.0f, 20.0f);
+    PRISMX_ASSERT(sampledSolid.r == 1.0f && sampledSolid.g == 1.0f && sampledSolid.b == 0.0f);
+
+    std::vector<GradientStop> stops = {
+        { 0.0f, CanvasColor::Red() },
+        { 0.5f, CanvasColor::Green() },
+        { 1.0f, CanvasColor::Blue() }
+    };
+    LinearGradientBrush linGrad({ 0.0f, 0.0f }, { 100.0f, 0.0f }, stops, SpreadMethod::Clamp);
+    PRISMX_ASSERT(linGrad.GetType() == BrushType::LinearGradient);
+    CanvasColor gStart = linGrad.Sample(0.0f, 0.0f);
+    CanvasColor gMid = linGrad.Sample(50.0f, 0.0f);
+    CanvasColor gEnd = linGrad.Sample(100.0f, 0.0f);
+    PRISMX_ASSERT(gStart.r > 0.99f && gStart.g < 0.01f);
+    PRISMX_ASSERT(gMid.g > 0.99f && gMid.r < 0.01f);
+    PRISMX_ASSERT(gEnd.b > 0.99f && gEnd.g < 0.01f);
+
+    RadialGradientBrush radGrad({ 50.0f, 50.0f }, 0.0f, { 50.0f, 50.0f }, 50.0f, stops);
+    PRISMX_ASSERT(radGrad.GetType() == BrushType::RadialGradient);
+    CanvasColor rCenter = radGrad.Sample(50.0f, 50.0f);
+    CanvasColor rOuter = radGrad.Sample(100.0f, 50.0f);
+    PRISMX_ASSERT(rCenter.r > 0.99f);
+    PRISMX_ASSERT(rOuter.b > 0.99f);
+
+    ConicGradientBrush conicGrad({ 50.0f, 50.0f }, 0.0f, stops);
+    PRISMX_ASSERT(conicGrad.GetType() == BrushType::ConicGradient);
+    CanvasColor cRight = conicGrad.Sample(100.0f, 50.0f);
+    CanvasColor cLeft = conicGrad.Sample(0.0f, 50.0f);
+    PRISMX_ASSERT(cRight.r > 0.95f);
+    PRISMX_ASSERT(cLeft.g > 0.95f);
+
+    // 3. IPrismCanvas2D Creation & Dimensions
+    ComPtr<IPrismCanvas2D> spCanvas;
+    HRESULT hr = PrismCreateCanvas2D(400, 300, spCanvas.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spCanvas.Get() != nullptr);
+    PRISMX_ASSERT(spCanvas->GetWidth() == 400);
+    PRISMX_ASSERT(spCanvas->GetHeight() == 300);
+
+    PixelSurface* pSurface = spCanvas->GetSurface();
+    PRISMX_ASSERT(pSurface != nullptr);
+    PRISMX_ASSERT(pSurface->GetSize() == 400 * 300);
+
+    // 4. State Stack & Transformations
+    spCanvas->Save();
+    spCanvas->Translate(100.0f, 50.0f);
+    spCanvas->Scale(2.0f, 2.0f);
+    spCanvas->Rotate(0.25f);
+    spCanvas->SetLineWidth(4.0f);
+    spCanvas->SetFillColor(CanvasColor::Red());
+    spCanvas->Restore();
+
+    // 5. Direct Geometry Rendering
+    spCanvas->SetFillColor(CanvasColor::Blue());
+    spCanvas->FillRect(20.0f, 20.0f, 80.0f, 60.0f);
+
+    CanvasColor sampleBlue = pSurface->GetPixel(50, 50);
+    PRISMX_ASSERT(sampleBlue.b > 0.9f);
+
+    spCanvas->SetStrokeColor(CanvasColor::Yellow());
+    spCanvas->SetLineWidth(2.0f);
+    spCanvas->StrokeRect(10.0f, 10.0f, 100.0f, 80.0f);
+
+    spCanvas->SetFillColor(CanvasColor::Green());
+    spCanvas->FillCircle(200.0f, 150.0f, 40.0f);
+    CanvasColor sampleGreen = pSurface->GetPixel(200, 150);
+    PRISMX_ASSERT(sampleGreen.g > 0.9f);
+
+    // 6. Vector Path Construction (Arcs, Béziers, RoundRect)
+    spCanvas->BeginPath();
+    spCanvas->MoveTo(10.0f, 150.0f);
+    spCanvas->BezierCurveTo(50.0f, 100.0f, 80.0f, 250.0f, 120.0f, 150.0f);
+    spCanvas->LineTo(120.0f, 200.0f);
+    spCanvas->ClosePath();
+    spCanvas->SetFillColor(CanvasColor::Cyan());
+    spCanvas->Fill();
+
+    spCanvas->BeginPath();
+    spCanvas->RoundRect(250.0f, 20.0f, 120.0f, 80.0f, 15.0f);
+    spCanvas->SetFillColor(CanvasColor::Magenta());
+    spCanvas->Fill();
+    CanvasColor sampleMagenta = pSurface->GetPixel(300, 60);
+    PRISMX_ASSERT(sampleMagenta.r > 0.9f && sampleMagenta.b > 0.9f);
+
+    // 7. Linear Gradient Path Fill
+    spCanvas->SetFillBrush(&linGrad);
+    spCanvas->FillRect(150.0f, 220.0f, 100.0f, 40.0f);
+
+    // 8. Bitmap Image Blitting & Resampling
+    PixelSurface iconSurface(16, 16, CanvasColor::White());
+    for (uint32_t y = 0; y < 16; ++y) {
+        for (uint32_t x = 0; x < 16; ++x) {
+            if ((x + y) % 2 == 0) iconSurface.SetPixel(x, y, CanvasColor::Red());
+        }
+    }
+    spCanvas->DrawImage(&iconSurface, 10.0f, 220.0f);
+    CanvasColor iconSample = pSurface->GetPixel(10, 220);
+    PRISMX_ASSERT(iconSample.r > 0.9f);
+
+    // 9. Pixel Data Manipulation (GetImageData & PutImageData)
+    ImageData imgData = spCanvas->GetImageData(20, 20, 40, 40);
+    PRISMX_ASSERT(imgData.width == 40 && imgData.height == 40);
+    PRISMX_ASSERT(imgData.pixels.size() == 1600);
+
+    // Invert pixel colors in image data
+    for (auto& p : imgData.pixels) {
+        CanvasColor c = CanvasColor::FromRgba8(p);
+        c.r = 1.0f - c.r;
+        c.g = 1.0f - c.g;
+        c.b = 1.0f - c.b;
+        p = c.ToRgba8();
+    }
+    spCanvas->PutImageData(imgData, 300, 200);
+
+    // 10. Typography Integration
+    spCanvas->SetFont("Sovereign Sans", 20.0f);
+    float textW = spCanvas->MeasureText("PrismX Canvas 2D");
+    PRISMX_ASSERT(textW > 0.0f);
+
+    spCanvas->SetFillColor(CanvasColor::White());
+    spCanvas->FillText("PrismX Canvas 2D", 20.0f, 120.0f);
+
+    // 11. IPrismCanvasDevice Factory Operations
+    ComPtr<IPrismCanvasDevice> spDevice;
+    hr = PrismCreateCanvasDevice(spDevice.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spDevice.Get() != nullptr);
+
+    ComPtr<IPrismCanvas2D> spCanvasDev;
+    hr = spDevice->CreateCanvas(200, 200, spCanvasDev.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spCanvasDev.Get() != nullptr);
+
+    ComPtr<IPrismBrush> spSolidBrush;
+    hr = spDevice->CreateSolidBrush(CanvasColor::Green(), spSolidBrush.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spSolidBrush.Get() != nullptr);
+    PRISMX_ASSERT(spSolidBrush->GetType() == BrushType::Solid);
+
+    // Save test output to BMP
+    bool saved = pSurface->SaveToBmp("prismx_canvas2d_test.bmp");
+    PRISMX_ASSERT(saved);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2179,9 +2358,10 @@ int main() {
     if (Test_PrismColor_AdvancedColor_HDR_Subsystem() != 0) return 1;
     if (Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem() != 0) return 1;
     if (Test_PrismVector_Font_Tessellation_Subsystem() != 0) return 1;
+    if (Test_PrismCanvas2D_Vector_Renderer() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (15/15)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (16/16)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
