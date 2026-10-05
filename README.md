@@ -131,6 +131,17 @@ graph TD
 - **KeyFrame & Expression Animations**: Smooth cubic hermite keyframe animations (`IScalarKeyFrameAnimation`, `IVector3KeyFrameAnimation`) and dynamic mathematical expression evaluation (`IExpressionAnimation`, e.g. `Lerp(A, B, Progress)`).
 - **Dynamic Property Sets**: Animated property maps (`ICompositionPropertySet`) for reactive UI bindings.
 
+### 12. PrismColor & Advanced Color Subsystem (WCS / HDR) (`prismx/color_system.hpp`)
+- **Color Spaces & Wide Gamuts**: Full support for sRGB, scRGB, AdobeRGB (1998), DCI-P3 / Display P3, and ITU-R BT.2020.
+- **Colorimetry & Perceptual Spaces**: CIE 1931 XYZ, CIE 1976 Lab, and $\Delta E_{76}$ perceptual difference calculation.
+- **Electro-Optical Transfer Functions (EOTF)**:
+  - Piecewise sRGB transfer curve.
+  - SMPTE ST 2084 Perceptual Quantizer (PQ) supporting 0 to 10,000 Nits high dynamic range.
+  - ARIB STD-B67 Hybrid Log-Gamma (HLG) relative scene luminance curve.
+- **ACES Film Tone Mapping**: ACES film curve operator for real-time luminance compression of HDR content onto SDR displays.
+- **ICC v4.3 Profile Management**: Clean-room parser and validator for ICC.1:2010 profile headers (`'acsp'`), chromaticities, and profile connection spaces.
+- **Sovereign COM Interfaces**: `IPrismColorProfile`, `IPrismColorTransform`, `IPrismColorManager` for color conversion and fast 32-bit RGBA bitmap translation.
+
 ---
 
 ## Clean-Room Guarantees

@@ -26,3 +26,4 @@
 #include "prismx/directml.hpp"
 #include "prismx/dcomp.hpp"
 #include "prismx/uicomposition.hpp"
+#include "prismx/color_system.hpp"

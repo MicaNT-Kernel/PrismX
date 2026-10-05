@@ -1642,6 +1642,144 @@ int Test_PrismComposition_VisualLayer_Subsystem() {
     return 0;
 }
 
+int Test_PrismColor_AdvancedColor_HDR_Subsystem() {
+    PRISMX_TEST("Test_PrismColor_AdvancedColor_HDR_Subsystem")
+    using namespace prismx::color;
+
+    // ------------------------------------------------------------------------
+    // Step 1: Transfer Curves: sRGB EOTF/OETF
+    // ------------------------------------------------------------------------
+    float linearMid = ColorMath::sRGBToLinear(0.5f);
+    PRISMX_ASSERT(linearMid > 0.0f && linearMid < 0.5f);
+    float reconMid = ColorMath::LinearTosRGB(linearMid);
+    PRISMX_ASSERT(std::abs(reconMid - 0.5f) < 1e-4f);
+
+    // ------------------------------------------------------------------------
+    // Step 2: SMPTE ST 2084 PQ (Perceptual Quantizer) for HDR10
+    // ------------------------------------------------------------------------
+    float pq100 = ColorMath::NitsToPQ(100.0f);
+    float nits100 = ColorMath::PQToNits(pq100);
+    PRISMX_ASSERT(std::abs(nits100 - 100.0f) < 1e-2f);
+
+    float pq1000 = ColorMath::NitsToPQ(1000.0f);
+    float nits1000 = ColorMath::PQToNits(pq1000);
+    PRISMX_ASSERT(std::abs(nits1000 - 1000.0f) < 0.5f);
+    PRISMX_ASSERT(pq1000 > pq100);
+
+    // ------------------------------------------------------------------------
+    // Step 3: Hybrid Log-Gamma (HLG)
+    // ------------------------------------------------------------------------
+    float hlgLow = 0.4f;
+    float linearHLG = ColorMath::HLGToLinear(hlgLow);
+    PRISMX_ASSERT(linearHLG > 0.0f && linearHLG < 1.0f);
+
+    // ------------------------------------------------------------------------
+    // Step 4: Colorimetry: Linear RGB to CIE 1931 XYZ and CIE 1976 Lab
+    // ------------------------------------------------------------------------
+    XYZColor d65White = ColorMath::LinearRGBToXYZ({ 1.0f, 1.0f, 1.0f });
+    PRISMX_ASSERT(std::abs(d65White.y - 1.0f) < 1e-3f);
+
+    LabColor labWhite = ColorMath::XYZToLab(d65White);
+    PRISMX_ASSERT(std::abs(labWhite.l - 100.0f) < 1e-2f);
+
+    LabColor redLab = ColorMath::XYZToLab(ColorMath::LinearRGBToXYZ({ 1.0f, 0.0f, 0.0f }));
+    LabColor blueLab = ColorMath::XYZToLab(ColorMath::LinearRGBToXYZ({ 0.0f, 0.0f, 1.0f }));
+    float deltaIdentical = ColorMath::DeltaE76(redLab, redLab);
+    float deltaRedBlue = ColorMath::DeltaE76(redLab, blueLab);
+    PRISMX_ASSERT(deltaIdentical < 1e-5f);
+    PRISMX_ASSERT(deltaRedBlue > 50.0f);
+
+    // ------------------------------------------------------------------------
+    // Step 5: Tone Mapping: ACES Film Curve
+    // ------------------------------------------------------------------------
+    float toneMappedSdr = ColorMath::ACESFilm(2.5f);
+    PRISMX_ASSERT(toneMappedSdr <= 1.0f && toneMappedSdr >= 0.0f);
+
+    // ------------------------------------------------------------------------
+    // Step 6: PrismColorManager COM Interface
+    // ------------------------------------------------------------------------
+    ComPtr<IPrismColorManager> colorMgr;
+    HRESULT hr = PrismCreateColorManager(colorMgr.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && colorMgr.Get() != nullptr);
+
+    ComPtr<IPrismColorProfile> srgbProf;
+    ComPtr<IPrismColorProfile> p3Prof;
+    ComPtr<IPrismColorProfile> bt2020Prof;
+    hr = colorMgr->CreateStandardProfile(ColorSpaceType::sRGB, srgbProf.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    hr = colorMgr->CreateStandardProfile(ColorSpaceType::DCI_P3, p3Prof.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    hr = colorMgr->CreateStandardProfile(ColorSpaceType::BT2020, bt2020Prof.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    PRISMX_ASSERT(srgbProf->GetColorSpaceType() == ColorSpaceType::sRGB);
+    PRISMX_ASSERT(p3Prof->GetColorSpaceType() == ColorSpaceType::DCI_P3);
+    PRISMX_ASSERT(bt2020Prof->GetColorSpaceType() == ColorSpaceType::BT2020);
+
+    // ------------------------------------------------------------------------
+    // Step 7: Synthetic ICC Profile Header Verification
+    // ------------------------------------------------------------------------
+    ICCProfileHeader iccHeader{};
+    iccHeader.size = sizeof(ICCProfileHeader);
+    iccHeader.cmmType = 0x50524953; // 'PRIS'
+    iccHeader.version = 0x04300000; // v4.3
+    iccHeader.deviceClass = 0x6D6E7472; // 'mntr'
+    iccHeader.colorSpace = 0x52474220; // 'RGB '
+    iccHeader.pcs = 0x58595A20; // 'XYZ '
+    iccHeader.magic = 0x61637370; // 'acsp'
+    iccHeader.renderingIntent = 0;
+
+    ComPtr<IPrismColorProfile> memProfile;
+    hr = colorMgr->CreateProfileFromMemory(&iccHeader, sizeof(iccHeader), memProfile.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    const ICCProfileHeader& readHeader = memProfile->GetHeader();
+    PRISMX_ASSERT(readHeader.magic == 0x61637370);
+
+    // ------------------------------------------------------------------------
+    // Step 8: Color Transform and Pixel Translation
+    // ------------------------------------------------------------------------
+    ComPtr<IPrismColorTransform> transform;
+    hr = colorMgr->CreateColorTransform(srgbProf.Get(), bt2020Prof.Get(), RenderingIntent::Perceptual, transform.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    RGBColor srcColor{ 1.0f, 0.0f, 0.0f, 1.0f };
+    RGBColor dstColor{};
+    hr = transform->Transform(srcColor, dstColor);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(dstColor.a == 1.0f);
+
+    // ------------------------------------------------------------------------
+    // Step 9: Bitmap Bits Translation
+    // ------------------------------------------------------------------------
+    uint8_t srcBitmap[16] = {
+        255, 0, 0, 255,
+        0, 255, 0, 255,
+        0, 0, 255, 255,
+        128, 128, 128, 255
+    };
+    uint8_t dstBitmap[16] = { 0 };
+    hr = transform->TransformBitmap(srcBitmap, dstBitmap, 2, 2, 8);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(dstBitmap[3] == 255 && dstBitmap[7] == 255);
+
+    // ------------------------------------------------------------------------
+    // Step 10: Tone Mapping HDR to SDR
+    // ------------------------------------------------------------------------
+    float sdrMappedACES = 0.0f;
+    hr = colorMgr->ToneMapHDRtoSDR(1000.0f, ToneMappingOperator::ACESFilm, sdrMappedACES);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(sdrMappedACES > 0.0f && sdrMappedACES <= 1.0f);
+
+    float sdrMappedReinhard = 0.0f;
+    hr = colorMgr->ToneMapHDRtoSDR(400.0f, ToneMappingOperator::Reinhard, sdrMappedReinhard);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(sdrMappedReinhard > 0.0f && sdrMappedReinhard < 1.0f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -1659,9 +1797,10 @@ int main() {
     if (Test_DirectML_And_DXCore_Subsystem() != 0) return 1;
     if (Test_DirectComposition_Subsystem() != 0) return 1;
     if (Test_PrismComposition_VisualLayer_Subsystem() != 0) return 1;
+    if (Test_PrismColor_AdvancedColor_HDR_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (12/12)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (13/13)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
