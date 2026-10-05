@@ -24,3 +24,4 @@
 #include "prismx/dstorage.hpp"
 #include "prismx/dxcore.hpp"
 #include "prismx/directml.hpp"
+#include "prismx/dcomp.hpp"

@@ -136,6 +136,15 @@ public:
         return *this;
     }
 
+    ComPtr& operator=(T* other) noexcept {
+        if (m_ptr != other) {
+            Reset();
+            m_ptr = other;
+            if (m_ptr) m_ptr->AddRef();
+        }
+        return *this;
+    }
+
     ComPtr& operator=(ComPtr&& other) noexcept {
         if (this != &other) {
             Reset();
@@ -157,6 +166,10 @@ public:
     void** PutVoid() noexcept {
         Reset();
         return reinterpret_cast<void**>(&m_ptr);
+    }
+
+    T** Put() noexcept {
+        return ReleaseAndGetAddressOf();
     }
 
     void Reset() noexcept {

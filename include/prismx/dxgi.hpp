@@ -83,6 +83,14 @@ enum DXGI_SWAP_EFFECT : uint32_t {
     DXGI_SWAP_EFFECT_FLIP_DISCARD    = 4
 };
 
+enum class DXGI_ALPHA_MODE : uint32_t {
+    UNSPECIFIED   = 0,
+    PREMULTIPLIED = 1,
+    STRAIGHT      = 2,
+    IGNORE        = 3,
+    FORCE_DWORD   = 0xFFFFFFFF
+};
+
 enum DXGI_SWAP_CHAIN_FLAG : uint32_t {
     DXGI_SWAP_CHAIN_FLAG_NONPREROTATED                          = 1,
     DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH                      = 2,
@@ -202,8 +210,12 @@ inline constexpr IID IID_IDXGIFactory =
 inline constexpr IID IID_IDXGIFactory1 = 
     { 0x770aae78, 0xf26f, 0x4dba, { 0xa8, 0x29, 0x25, 0x3c, 0x83, 0xd1, 0xb3, 0x87 } };
 
+inline constexpr IID IID_IDXGIDevice = 
+    { 0x54ec77fa, 0x1377, 0x44e6, { 0x8c, 0x32, 0x88, 0xfd, 0x5f, 0x44, 0xc8, 0x4c } };
+
 // Forward declarations
 class IDXGIObject;
+class IDXGIDevice;
 class IDXGIDeviceSubObject;
 class IDXGIResource;
 class IDXGISurface;
@@ -267,6 +279,15 @@ public:
     virtual HRESULT GetContainingOutput(IDXGIOutput** ppOutput) = 0;
     virtual HRESULT GetFrameStatistics(DXGI_FRAME_STATISTICS* pStats) = 0;
     virtual HRESULT GetLastPresentCount(uint32_t* pLastPresentCount) = 0;
+};
+
+class IDXGIDevice : public IDXGIObject {
+public:
+    virtual HRESULT GetAdapter(IDXGIAdapter** pAdapter) = 0;
+    virtual HRESULT CreateSurface(const void* pDesc, uint32_t NumSurfaces, uint32_t Usage, const void* pSharedResource, IDXGISurface** ppSurface) = 0;
+    virtual HRESULT QueryResourceResidency(IUnknown* const* ppResources, uint32_t* pResidencyStatus, uint32_t NumResources) = 0;
+    virtual HRESULT SetGPUThreadPriority(int32_t Priority) = 0;
+    virtual HRESULT GetGPUThreadPriority(int32_t* pPriority) = 0;
 };
 
 class IDXGIFactory : public IDXGIObject {

@@ -1279,6 +1279,211 @@ int Test_DirectML_And_DXCore_Subsystem() {
     return 0;
 }
 
+// ============================================================================
+// Suite 11: Windows DirectComposition & Modern Compositor Subsystem
+// ============================================================================
+int Test_DirectComposition_Subsystem() {
+    PRISMX_TEST("Test_DirectComposition_Subsystem")
+
+    // ------------------------------------------------------------------------
+    // Step 1: Create DirectComposition Device
+    // ------------------------------------------------------------------------
+    ComPtr<IDCompositionDevice> dcompDevice;
+    int32_t hr = DCompositionCreateDevice(nullptr, IID_IDCompositionDevice, dcompDevice.PutVoid());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(dcompDevice.Get() != nullptr);
+
+    // ------------------------------------------------------------------------
+    // Step 2: Create Visuals & Establish Visual Tree Hierarchy
+    // ------------------------------------------------------------------------
+    ComPtr<IDCompositionVisual> rootVisual;
+    hr = dcompDevice->CreateVisual(rootVisual.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    ComPtr<IDCompositionVisual> cardVisual;
+    hr = dcompDevice->CreateVisual(cardVisual.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    ComPtr<IDCompositionVisual> textVisual;
+    hr = dcompDevice->CreateVisual(textVisual.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // Properties on cardVisual
+    cardVisual->SetOffsetX(40.0f);
+    cardVisual->SetOffsetY(60.0f);
+    cardVisual->SetOpacity(0.92f);
+    cardVisual->SetInterpolationMode(DCOMPOSITION_BITMAP_INTERPOLATION_MODE::LINEAR);
+    cardVisual->SetBorderMode(DCOMPOSITION_BORDER_MODE::SOFT);
+
+    PRISMX_ASSERT(cardVisual->GetOffsetX() == 40.0f);
+    PRISMX_ASSERT(cardVisual->GetOffsetY() == 60.0f);
+    PRISMX_ASSERT(std::abs(cardVisual->GetOpacity() - 0.92f) < 1e-4f);
+
+    // Build hierarchy: root -> card -> text
+    rootVisual->AddVisual(cardVisual.Get(), true, nullptr);
+    cardVisual->AddVisual(textVisual.Get(), true, nullptr);
+
+    PRISMX_ASSERT(rootVisual->GetChildren().size() == 1);
+    PRISMX_ASSERT(cardVisual->GetChildren().size() == 1);
+    PRISMX_ASSERT(rootVisual->GetChildren()[0] == cardVisual.Get());
+    PRISMX_ASSERT(cardVisual->GetChildren()[0] == textVisual.Get());
+
+    // ------------------------------------------------------------------------
+    // Step 3: Affine Transforms (Translate, Scale, Rotate, Matrix)
+    // ------------------------------------------------------------------------
+    ComPtr<IDCompositionTranslateTransform> translate;
+    hr = dcompDevice->CreateTranslateTransform(translate.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    translate->SetOffsetX(15.0f);
+    translate->SetOffsetY(25.0f);
+    PRISMX_ASSERT(translate->GetOffsetX() == 15.0f);
+    PRISMX_ASSERT(translate->GetOffsetY() == 25.0f);
+    cardVisual->SetTransform(translate.Get());
+    PRISMX_ASSERT(cardVisual->GetTransform() == translate.Get());
+
+    ComPtr<IDCompositionScaleTransform> scale;
+    hr = dcompDevice->CreateScaleTransform(scale.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    scale->SetScaleX(1.5f);
+    scale->SetScaleY(2.0f);
+    scale->SetCenterX(100.0f);
+    PRISMX_ASSERT(scale->GetScaleX() == 1.5f && scale->GetScaleY() == 2.0f);
+
+    ComPtr<IDCompositionRotateTransform> rotate;
+    hr = dcompDevice->CreateRotateTransform(rotate.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    rotate->SetAngle(90.0f);
+    PRISMX_ASSERT(rotate->GetAngle() == 90.0f);
+
+    ComPtr<IDCompositionMatrixTransform> matTransform;
+    hr = dcompDevice->CreateMatrixTransform(matTransform.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    DCOMP_MATRIX3x2 m{};
+    m.m[0][0] = 2.0f; m.m[1][1] = 2.0f;
+    matTransform->SetMatrix(m);
+    PRISMX_ASSERT(matTransform->GetMatrix().m[0][0] == 2.0f);
+
+    // ------------------------------------------------------------------------
+    // Step 4: Animation Curves (Cubic & Sinusoidal Easing)
+    // ------------------------------------------------------------------------
+    ComPtr<IDCompositionAnimation> anim;
+    hr = dcompDevice->CreateAnimation(anim.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // Linear curve from 0.0 to 1.0s: val = 0.0 + 100.0 * dt
+    anim->AddCubic(0.0, 0.0f, 100.0f, 0.0f, 0.0f);
+    // Sinusoidal curve starting at 1.0s: bias = 100, amp = 20, freq = 3.14159, phase = 0
+    anim->AddSinusoidal(1.0, 100.0f, 20.0f, 3.14159f / 2.0f, 0.0f);
+    anim->End(3.0, 200.0f);
+
+    float val0 = anim->Evaluate(0.0);
+    float valHalf = anim->Evaluate(0.5);
+    float valOne = anim->Evaluate(1.0);
+    float valEnd = anim->Evaluate(4.0);
+
+    PRISMX_ASSERT(std::abs(val0 - 0.0f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(valHalf - 50.0f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(valOne - 100.0f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(valEnd - 200.0f) < 1e-4f);
+
+    // Bind animation to opacity
+    textVisual->SetOpacity(anim.Get());
+
+    // ------------------------------------------------------------------------
+    // Step 5: Clipping (Rect Clip & Rounded Rectangle Clip)
+    // ------------------------------------------------------------------------
+    DCOMP_RECT clipRect{ 0, 0, 800, 600 };
+    rootVisual->SetClip(clipRect);
+
+    ComPtr<IDCompositionRectangleClip> rectClip;
+    hr = dcompDevice->CreateRectangleClip(rectClip.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    rectClip->SetLeft(10.0f);
+    rectClip->SetTop(10.0f);
+    rectClip->SetRight(300.0f);
+    rectClip->SetBottom(200.0f);
+    rectClip->SetTopLeftRadiusX(16.0f);
+    rectClip->SetTopLeftRadiusY(16.0f);
+    cardVisual->SetClip(rectClip.Get());
+
+    // ------------------------------------------------------------------------
+    // Step 6: Composition Surfaces (BeginDraw / Paint / EndDraw)
+    // ------------------------------------------------------------------------
+    ComPtr<IDCompositionSurface> surface;
+    hr = dcompDevice->CreateSurface(128, 128, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_ALPHA_MODE::PREMULTIPLIED, surface.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(surface->GetWidth() == 128 && surface->GetHeight() == 128);
+
+    void* pUpdateObj = nullptr;
+    DCOMP_POINT updateOffset{};
+    DCOMP_RECT drawRect{ 0, 0, 64, 64 };
+    hr = surface->BeginDraw(&drawRect, IID_IDCompositionSurface, &pUpdateObj, &updateOffset);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pUpdateObj != nullptr);
+
+    // Paint solid color into surface buffer
+    uint8_t* pBuf = surface->GetBuffer();
+    PRISMX_ASSERT(pBuf != nullptr);
+    for (size_t i = 0; i < 128 * 128; i++) {
+        pBuf[i * 4 + 0] = 0x30; // R
+        pBuf[i * 4 + 1] = 0x80; // G
+        pBuf[i * 4 + 2] = 0xE0; // B
+        pBuf[i * 4 + 3] = 0xFF; // A
+    }
+    hr = surface->EndDraw();
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // Bind surface to visual content
+    cardVisual->SetContent(surface.Get());
+    PRISMX_ASSERT(cardVisual->GetContent() == surface.Get());
+
+    // ------------------------------------------------------------------------
+    // Step 7: Composition Target & Frame Commit
+    // ------------------------------------------------------------------------
+    HWND fakeHwnd = reinterpret_cast<HWND>(0xCAFE0001);
+    ComPtr<IDCompositionTarget> target;
+    hr = dcompDevice->CreateTargetForHwnd(fakeHwnd, true, target.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(target->GetHwnd() == fakeHwnd);
+
+    hr = target->SetRoot(rootVisual.Get());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(target->GetRoot() == rootVisual.Get());
+
+    // Commit Transaction
+    hr = dcompDevice->Commit();
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    DCOMPOSITION_FRAME_STATISTICS stats{};
+    hr = dcompDevice->GetFrameStatistics(&stats);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(stats.nextKeyFrame == 1);
+    PRISMX_ASSERT(stats.currentFrameTime > 0);
+
+    // ------------------------------------------------------------------------
+    // Step 8: Device2 & Surface Handle
+    // ------------------------------------------------------------------------
+    ComPtr<IDCompositionDevice2> dcompDevice2;
+    hr = dcompDevice->QueryInterface(IID_IDCompositionDevice2, dcompDevice2.PutVoid());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    ComPtr<IDCompositionVisual2> vis2;
+    hr = dcompDevice2->CreateVisual2(vis2.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    vis2->SetOpacityMode(DCOMPOSITION_OPACITY_MODE::MULTIPLY);
+    vis2->SetBackFaceVisibility(DCOMPOSITION_BACKFACE_VISIBILITY::HIDDEN);
+    PRISMX_ASSERT(vis2->GetOpacityMode() == DCOMPOSITION_OPACITY_MODE::MULTIPLY);
+    PRISMX_ASSERT(vis2->GetBackFaceVisibility() == DCOMPOSITION_BACKFACE_VISIBILITY::HIDDEN);
+
+    HANDLE surfHandle = nullptr;
+    hr = DCompositionCreateSurfaceHandle(0, nullptr, &surfHandle);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(surfHandle != nullptr);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -1294,10 +1499,12 @@ int main() {
     if (Test_DirectX_Raytracing_And_MeshShaders() != 0) return 1;
     if (Test_DirectStorage_Subsystem() != 0) return 1;
     if (Test_DirectML_And_DXCore_Subsystem() != 0) return 1;
+    if (Test_DirectComposition_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (10/10)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (11/11)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
 

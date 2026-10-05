@@ -118,6 +118,12 @@ graph TD
   - **Batch Normalization**: Spatial channel normalization with scaling and shifting ($Y = \frac{X - \mu}{\sqrt{\sigma^2 + \epsilon}} \gamma + \beta$).
   - **Element-Wise Math**: High-speed addition and multiplication tensor passes.
 
+### 10. DirectComposition Modern Compositor Subsystem (`prismx/dcomp.hpp`)
+- **DirectComposition Architecture**: `IDCompositionDevice`, `IDCompositionDevice2`, `IDCompositionTarget`, `IDCompositionVisual`, `IDCompositionVisual2`, `IDCompositionSurface`, `IDCompositionAnimation`.
+- **Hardware-Accelerated Visual Trees**: Hierarchical visuals with Z-ordering, opacity layers, clipping bounds (rectangles & rounded corners), and affine transforms.
+- **Parametric Animation Engine**: Smooth animation curves with cubic bezier polynomials, sinusoidal oscillations, repeats, and direct binding to visual properties.
+- **Composition Surfaces & Targets**: Low-latency rendering surfaces (`BeginDraw`/`EndDraw`) and HWND target binding with synchronized multi-target `Commit()` pipelines.
+
 ---
 
 ## Clean-Room Guarantees
