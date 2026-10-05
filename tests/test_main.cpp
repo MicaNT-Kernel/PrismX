@@ -2338,6 +2338,268 @@ int Test_PrismCanvas2D_Vector_Renderer() {
     return 0;
 }
 
+int Test_PrismEffects_PostProcessing_And_EffectGraph() {
+    PRISMX_TEST("Test_PrismEffects_PostProcessing_And_EffectGraph")
+    using namespace prismx::effects;
+
+    // 1. Context Creation & Basic Image Manipulation
+    ComPtr<IPrismEffectContext> spCtx;
+    HRESULT hr = PrismCreateEffectContext(spCtx.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spCtx.Get() != nullptr);
+
+    const uint32_t W = 64;
+    const uint32_t H = 64;
+    std::vector<uint32_t> testPixels(static_cast<size_t>(W) * H, 0xFF000000); // Black
+
+    // Draw a sharp white box in center
+    for (uint32_t y = 24; y < 40; ++y) {
+        for (uint32_t x = 24; x < 40; ++x) {
+            testPixels[y * W + x] = 0xFFFFFFFF; // White
+        }
+    }
+
+    ComPtr<IPrismImage> spSrcImg;
+    hr = spCtx->CreateImageFromPixels(W, H, testPixels.data(), spSrcImg.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spSrcImg.Get() != nullptr);
+    PRISMX_ASSERT(spSrcImg->GetWidth() == W && spSrcImg->GetHeight() == H);
+    PRISMX_ASSERT(spSrcImg->GetPixel(30, 30) == 0xFFFFFFFF);
+    PRISMX_ASSERT(spSrcImg->GetPixel(5, 5) == 0xFF000000);
+
+    // Test Clone
+    ComPtr<IPrismImage> spCloned;
+    hr = spSrcImg->Clone(spCloned.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spCloned.Get() != nullptr);
+    PRISMX_ASSERT(spCloned->GetPixel(30, 30) == 0xFFFFFFFF);
+
+    // 2. Gaussian Blur Effect
+    ComPtr<IPrismEffect> spBlur;
+    hr = spCtx->CreateEffect(CLSID_PrismGaussianBlurEffect, spBlur.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spBlur.Get() != nullptr);
+    PRISMX_ASSERT(std::string(spBlur->GetEffectName()) == "PrismGaussianBlurEffect");
+
+    spBlur->SetInput(0, spSrcImg.Get());
+    spBlur->SetFloat(PROP_GAUSSIAN_STANDARD_DEVIATION, 2.5f);
+    spBlur->SetInt(PROP_GAUSSIAN_BORDER_MODE, static_cast<int32_t>(BorderMode::Soft));
+
+    ComPtr<IPrismImage> spBlurred;
+    hr = spBlur->GetOutput(spBlurred.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spBlurred.Get() != nullptr);
+
+    // Center pixel should be diffused (less than 255)
+    uint32_t blurredCenter = spBlurred->GetPixel(30, 30);
+    PixelRGBA cCenter = PixelRGBA::FromU32(blurredCenter);
+    PRISMX_ASSERT(cCenter.r < 1.0f && cCenter.r > 0.1f);
+
+    // Pixel outside original white square should now have diffused light
+    uint32_t blurredEdge = spBlurred->GetPixel(22, 22);
+    PixelRGBA cEdge = PixelRGBA::FromU32(blurredEdge);
+    PRISMX_ASSERT(cEdge.r > 0.05f);
+
+    // 3. Color Matrix Effect
+    ComPtr<IPrismEffect> spColorMat;
+    hr = spCtx->CreateEffect(CLSID_PrismColorMatrixEffect, spColorMat.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spColorMat.Get() != nullptr);
+
+    // Test Invert Matrix
+    ColorMatrix5x4 matInvert = ColorMatrix5x4::Invert();
+    spColorMat->SetValue(PROP_COLORMATRIX_MATRIX, &matInvert, sizeof(matInvert));
+    spColorMat->SetInput(0, spSrcImg.Get());
+
+    ComPtr<IPrismImage> spInverted;
+    hr = spColorMat->GetOutput(spInverted.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spInverted.Get() != nullptr);
+
+    // Formerly black pixel should now be white, and center white should be black
+    PixelRGBA invCorner = PixelRGBA::FromU32(spInverted->GetPixel(5, 5));
+    PixelRGBA invCenter = PixelRGBA::FromU32(spInverted->GetPixel(30, 30));
+    PRISMX_ASSERT(invCorner.r > 0.99f && invCenter.r < 0.01f);
+
+    // Test Grayscale Matrix on a pure red image
+    std::vector<uint32_t> redPixels(static_cast<size_t>(W) * H, 0xFFFF0000); // ARGB Red
+    ComPtr<IPrismImage> spRedImg;
+    spCtx->CreateImageFromPixels(W, H, redPixels.data(), spRedImg.Put());
+
+    ColorMatrix5x4 matGray = ColorMatrix5x4::Grayscale();
+    spColorMat->SetValue(PROP_COLORMATRIX_MATRIX, &matGray, sizeof(matGray));
+    spColorMat->SetInput(0, spRedImg.Get());
+    spColorMat->Invalidate();
+
+    ComPtr<IPrismImage> spGray;
+    hr = spColorMat->GetOutput(spGray.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spGray.Get() != nullptr);
+    PixelRGBA grayPix = PixelRGBA::FromU32(spGray->GetPixel(10, 10));
+    PRISMX_ASSERT(std::abs(grayPix.r - grayPix.g) < 0.01f);
+    PRISMX_ASSERT(std::abs(grayPix.g - grayPix.b) < 0.01f);
+    PRISMX_ASSERT(grayPix.r > 0.20f && grayPix.r < 0.23f); // ~0.2126
+
+    // 4. Bloom & HDR Glow Effect
+    ComPtr<IPrismEffect> spBloom;
+    hr = spCtx->CreateEffect(CLSID_PrismBloomEffect, spBloom.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spBloom.Get() != nullptr);
+
+    spBloom->SetInput(0, spSrcImg.Get());
+    spBloom->SetFloat(PROP_BLOOM_THRESHOLD, 0.5f);
+    spBloom->SetFloat(PROP_BLOOM_INTENSITY, 2.0f);
+    spBloom->SetFloat(PROP_BLOOM_BLUR_RADIUS, 3.0f);
+
+    ComPtr<IPrismImage> spBloomed;
+    hr = spBloom->GetOutput(spBloomed.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spBloomed.Get() != nullptr);
+
+    // Halo around the white box
+    PixelRGBA bloomHalo = PixelRGBA::FromU32(spBloomed->GetPixel(21, 21));
+    PRISMX_ASSERT(bloomHalo.r > 0.05f);
+
+    // 5. Drop Shadow Effect
+    ComPtr<IPrismEffect> spShadow;
+    hr = spCtx->CreateEffect(CLSID_PrismDropShadowEffect, spShadow.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spShadow.Get() != nullptr);
+
+    spShadow->SetInput(0, spSrcImg.Get());
+    spShadow->SetFloat(PROP_SHADOW_OFFSET_X, 8.0f);
+    spShadow->SetFloat(PROP_SHADOW_OFFSET_Y, 8.0f);
+    spShadow->SetFloat(PROP_SHADOW_BLUR_RADIUS, 2.5f);
+    spShadow->SetFloat(PROP_SHADOW_OPACITY, 0.8f);
+
+    ComPtr<IPrismImage> spShadowed;
+    hr = spShadow->GetOutput(spShadowed.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spShadowed.Get() != nullptr);
+
+    // Shadow offset location should show shadow
+    uint32_t shadowSpot = spShadowed->GetPixel(45, 45);
+    PRISMX_ASSERT(shadowSpot != 0xFF000000 || spShadowed->GetPixel(35, 45) != 0);
+
+    // 6. 3x3 Convolution Matrix Effect (Sharpen & Edge Detection)
+    ComPtr<IPrismEffect> spConv;
+    hr = spCtx->CreateEffect(CLSID_PrismConvolutionEffect, spConv.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spConv.Get() != nullptr);
+
+    spConv->SetInput(0, spSrcImg.Get());
+    spConv->SetInt(PROP_CONV_PRESET, static_cast<int32_t>(ConvolutionPreset::EdgeDetect));
+
+    ComPtr<IPrismImage> spEdges;
+    hr = spConv->GetOutput(spEdges.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spEdges.Get() != nullptr);
+
+    // Boundary of white square should have high edge response
+    PixelRGBA edgePix = PixelRGBA::FromU32(spEdges->GetPixel(24, 24));
+    PRISMX_ASSERT(edgePix.r > 0.1f);
+    // Interior uniform white area should have zero edge response
+    PixelRGBA intPix = PixelRGBA::FromU32(spEdges->GetPixel(32, 32));
+    PRISMX_ASSERT(intPix.r < 0.05f);
+
+    // 7. Vignette Effect
+    ComPtr<IPrismEffect> spVignette;
+    hr = spCtx->CreateEffect(CLSID_PrismVignetteEffect, spVignette.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spVignette.Get() != nullptr);
+
+    // Create uniform white image
+    std::vector<uint32_t> whitePixels(static_cast<size_t>(W) * H, 0xFFFFFFFF);
+    ComPtr<IPrismImage> spWhiteImg;
+    spCtx->CreateImageFromPixels(W, H, whitePixels.data(), spWhiteImg.Put());
+
+    spVignette->SetInput(0, spWhiteImg.Get());
+    spVignette->SetFloat(PROP_VIGNETTE_CENTER_X, 0.5f);
+    spVignette->SetFloat(PROP_VIGNETTE_CENTER_Y, 0.5f);
+    spVignette->SetFloat(PROP_VIGNETTE_RADIUS, 0.9f);
+    spVignette->SetFloat(PROP_VIGNETTE_SOFTNESS, 0.5f);
+
+    ComPtr<IPrismImage> spVignetted;
+    hr = spVignette->GetOutput(spVignetted.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spVignetted.Get() != nullptr);
+
+    // Center should remain bright, corner should darken significantly
+    PixelRGBA vigCenter = PixelRGBA::FromU32(spVignetted->GetPixel(32, 32));
+    PixelRGBA vigCorner = PixelRGBA::FromU32(spVignetted->GetPixel(1, 1));
+    PRISMX_ASSERT(vigCenter.r > 0.95f);
+    PRISMX_ASSERT(vigCorner.r < 0.5f);
+
+    // 8. Tone Mapping Effect (ACES & Reinhard)
+    ComPtr<IPrismEffect> spToneMap;
+    hr = spCtx->CreateEffect(CLSID_PrismToneMappingEffect, spToneMap.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spToneMap.Get() != nullptr);
+
+    spToneMap->SetInput(0, spWhiteImg.Get());
+    spToneMap->SetInt(PROP_TONEMAP_OPERATOR, static_cast<int32_t>(ToneMapOperator::ACES));
+    spToneMap->SetFloat(PROP_TONEMAP_EXPOSURE, 1.2f);
+
+    ComPtr<IPrismImage> spToneMapped;
+    hr = spToneMap->GetOutput(spToneMapped.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spToneMapped.Get() != nullptr);
+    PixelRGBA tmPix = PixelRGBA::FromU32(spToneMapped->GetPixel(32, 32));
+    PRISMX_ASSERT(tmPix.r > 0.8f && tmPix.r <= 1.0f);
+
+    // 9. Blend Effect (Multiply, Screen)
+    ComPtr<IPrismEffect> spBlend;
+    hr = spCtx->CreateEffect(CLSID_PrismBlendEffect, spBlend.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spBlend.Get() != nullptr);
+
+    spBlend->SetInput(0, spSrcImg.Get());
+    spBlend->SetInput(1, spWhiteImg.Get());
+    spBlend->SetInt(PROP_BLEND_MODE, static_cast<int32_t>(EffectBlendMode::Multiply));
+
+    ComPtr<IPrismImage> spBlended;
+    hr = spBlend->GetOutput(spBlended.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spBlended.Get() != nullptr);
+    PRISMX_ASSERT(spBlended->GetPixel(30, 30) == 0xFFFFFFFF);
+    PRISMX_ASSERT(spBlended->GetPixel(5, 5) == 0xFF000000);
+
+    // 10. Chromatic Aberration Effect
+    ComPtr<IPrismEffect> spChroma;
+    hr = spCtx->CreateEffect(CLSID_PrismChromaticAberrationEffect, spChroma.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spChroma.Get() != nullptr);
+
+    spChroma->SetInput(0, spSrcImg.Get());
+    spChroma->SetFloat(PROP_CHROMA_OFFSET_R_X, 3.0f);
+    spChroma->SetFloat(PROP_CHROMA_OFFSET_B_X, -3.0f);
+
+    ComPtr<IPrismImage> spChromaOut;
+    hr = spChroma->GetOutput(spChromaOut.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spChromaOut.Get() != nullptr);
+
+    // Edge of square should have separate red and blue fringes
+    PixelRGBA cRedFringe = PixelRGBA::FromU32(spChromaOut->GetPixel(21, 30));
+    PRISMX_ASSERT(cRedFringe.r > cRedFringe.b);
+
+    // 11. Effect Graph Execution (DAG Pipeline)
+    ComPtr<IPrismEffectGraph> spGraph;
+    hr = spCtx->CreateEffectGraph(spGraph.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spGraph.Get() != nullptr);
+
+    // Pipeline: Source -> Sepia Color Matrix -> Vignette -> Bloom
+    ComPtr<IPrismEffect> spSepia;
+    spCtx->CreateEffect(CLSID_PrismColorMatrixEffect, spSepia.Put());
+    ColorMatrix5x4 matSepia = ColorMatrix5x4::Sepia();
+    spSepia->SetValue(PROP_COLORMATRIX_MATRIX, &matSepia, sizeof(matSepia));
+    spSepia->SetInput(0, spSrcImg.Get());
+
+    ComPtr<IPrismEffect> spVigNode;
+    spCtx->CreateEffect(CLSID_PrismVignetteEffect, spVigNode.Put());
+    spVigNode->SetInputEffect(0, spSepia.Get());
+
+    ComPtr<IPrismEffect> spBloomNode;
+    spCtx->CreateEffect(CLSID_PrismBloomEffect, spBloomNode.Put());
+    spBloomNode->SetInputEffect(0, spVigNode.Get());
+
+    spGraph->AddEffect(spSepia.Get());
+    spGraph->AddEffect(spVigNode.Get());
+    spGraph->AddEffect(spBloomNode.Get());
+    spGraph->SetRootEffect(spBloomNode.Get());
+
+    PRISMX_ASSERT(spGraph->GetNodeCount() == 3);
+
+    ComPtr<IPrismImage> spPipelineResult;
+    hr = spGraph->Render(spPipelineResult.Put());
+    PRISMX_ASSERT(SUCCEEDED(hr) && spPipelineResult.Get() != nullptr);
+
+    // Save final rendered output to BMP for visual audit
+    bool bmpSaved = spPipelineResult->SaveToBmp("prismx_effects_pipeline_test.bmp");
+    PRISMX_ASSERT(bmpSaved);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2359,12 +2621,14 @@ int main() {
     if (Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem() != 0) return 1;
     if (Test_PrismVector_Font_Tessellation_Subsystem() != 0) return 1;
     if (Test_PrismCanvas2D_Vector_Renderer() != 0) return 1;
+    if (Test_PrismEffects_PostProcessing_And_EffectGraph() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (16/16)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (17/17)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
 
 
 

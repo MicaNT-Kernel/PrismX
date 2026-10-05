@@ -180,6 +180,24 @@ graph TD
 - **Typography & Font Layout Integration**: Native vector text measurement (`MeasureText`) and anti-aliased text rendering (`FillText`, `StrokeText`) integrated with `BuiltinTypeface` and `TextLayoutEngine`.
 - **Sovereign COM Interfaces**: `IPrismBrush`, `IPrismCanvas2D`, `IPrismCanvasDevice` with factory entry points (`PrismCreateCanvas2D`, `PrismCreateCanvasDevice`).
 
+### 16. Sovereign Image Processing, Post-Processing Pipeline & Effect Graph (`prismx/effects.hpp`)
+- **Direct2D Effects & DirectComposition-Compatible COM Architecture**: `IPrismImage`, `IPrismEffect`, `IPrismEffectGraph`, and `IPrismEffectContext` operating with pure ISO C++23 zero-dependency software execution.
+- **High-Performance Filter Implementations**:
+  - `Gaussian Blur`: Separable 2-pass 1D horizontal & vertical convolution with configurable standard deviation, kernel sizing, and border modes (`Soft`, `Hard`).
+  - `Directional Blur`: Angle and radius parameterized motion blur with uniform line sampling.
+  - `Color Matrix & Color Grading`: 5x4 affine color transforms supporting Sepia, Invert, Grayscale (Rec.709 luminance), Brightness/Contrast adjustment, and Saturation modulation.
+  - `Bloom & HDR Glow`: Dual-pass luminance threshold extraction, Gaussian downsampling diffusion, and additive tone blending.
+  - `Drop Shadow`: Gaussian-blurred offset alpha shadow synthesis with configurable color, opacity, blur radius, and X/Y offsets.
+  - `3x3 Spatial Convolution Filter`: High-pass edge detection (8-connected Laplacian), unsharp mask sharpening, directional emboss with bias, box blur, and arbitrary user-defined 3x3 convolution kernels.
+  - `Vignette & Chromatic Aberration`: Radial falloff vignette with customizable focal center, radius, and softness; RGB chromatic dispersion simulation with per-channel horizontal/vertical offsets.
+  - `Tone Mapping Operators`: Reinhard, ACES Film, Filmic (Uncharted 2), and linear exposure tone reproduction.
+  - `Composite Blend Modes`: Normal, Multiply, Screen, Overlay, Darken, Lighten, Color Dodge, Color Burn, Hard Light, Soft Light, Difference, Exclusion, and Additive.
+- **Node-Based Directed Acyclic Graph (DAG) Pipeline**:
+  - Multi-input / multi-output effect graphs with lazy dependency evaluation and dirty propagation.
+  - Invalidation propagation caching intermediate buffers and executing topological rendering passes.
+  - Bitmap serialization engine exporting graph outputs directly to uncompressed 32-bit BMP files.
+- **Entry Points & Context**: `PrismCreateEffectContext` creating `IPrismEffectContext` instances for image allocation, filter instantiation by CLSID, and graph composition.
+
 ---
 
 ## Clean-Room Guarantees

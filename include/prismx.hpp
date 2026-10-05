@@ -30,3 +30,4 @@
 #include "prismx/pointer_input.hpp"
 #include "prismx/vector_font.hpp"
 #include "prismx/canvas2d.hpp"
+#include "prismx/effects.hpp"
