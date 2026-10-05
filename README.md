@@ -142,6 +142,15 @@ graph TD
 - **ICC v4.3 Profile Management**: Clean-room parser and validator for ICC.1:2010 profile headers (`'acsp'`), chromaticities, and profile connection spaces.
 - **Sovereign COM Interfaces**: `IPrismColorProfile`, `IPrismColorTransform`, `IPrismColorManager` for color conversion and fast 32-bit RGBA bitmap translation.
 
+### 13. PrismInput & Multi-Touch Gesture / Inking Subsystem (`prismx/pointer_input.hpp`)
+- **Unified Pointer Input Modeling**: `PointerPoint`, `PointerDeviceType` (Mouse, Touch, Pen, Touchpad), and `PointerButtonState` with sub-pixel contact rects.
+- **Multi-Touch Gesture Recognizer**: High-precision recognition pipeline for Tap, Double Tap, Long Press / Hold, Drag / Pan (with velocity tracking), Dual-Contact Pinch-to-Zoom (dynamic scale factor), Dual-Contact Rotation (angular displacement), and High-Velocity Swipes.
+- **Stylus Inking & GPU Tessellation Engine**:
+  - `InkStroke` with raw digitizer packet ingestion (pressure, tilt, timestamp).
+  - Catmull-Rom cubic spline interpolation eliminating digitizer stair-stepping.
+  - Calibrated non-linear pressure curves (Linear, Soft, Hard, Sigmoid) with velocity-modulated stroke width.
+  - Real-time tessellation into GPU triangle strips ready for Direct3D 11/12 vertex buffers or DirectComposition surfaces.
+
 ---
 
 ## Clean-Room Guarantees

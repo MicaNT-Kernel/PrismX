@@ -1780,6 +1780,168 @@ int Test_PrismColor_AdvancedColor_HDR_Subsystem() {
     return 0;
 }
 
+int Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem() {
+    PRISMX_TEST("Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem")
+
+    using namespace prismx::input;
+
+    // ------------------------------------------------------------------------
+    // Step 1: Pointer Point Modeling & Bitmask Buttons
+    // ------------------------------------------------------------------------
+    PointerPoint pt{};
+    pt.pointerId = 101;
+    pt.deviceType = PointerDeviceType::Pen;
+    pt.eventType = PointerEventType::Down;
+    pt.x = 450.0f;
+    pt.y = 320.0f;
+    pt.pressure = 0.82f;
+    pt.tiltX = 15.0f;
+    pt.tiltY = -8.0f;
+    pt.buttons = PointerButtonState::Left | PointerButtonState::Barrel;
+    pt.timestampMs = 1000;
+
+    PRISMX_ASSERT(pt.pointerId == 101);
+    PRISMX_ASSERT(pt.deviceType == PointerDeviceType::Pen);
+    PRISMX_ASSERT(pt.buttons & PointerButtonState::Barrel);
+    PRISMX_ASSERT(pt.buttons & PointerButtonState::Left);
+    PRISMX_ASSERT(!(pt.buttons & PointerButtonState::Right));
+
+    // ------------------------------------------------------------------------
+    // Step 2: Tap & Double Tap Gesture Recognition
+    // ------------------------------------------------------------------------
+    GestureRecognizer recognizer;
+    std::vector<GestureEvent> events;
+    recognizer.AddCallback([&](const GestureEvent& e) {
+        events.push_back(e);
+    });
+
+    // First tap
+    PointerPoint tap1Down{ 1, PointerDeviceType::Touch, PointerEventType::Down, 100.0f, 100.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 1000 };
+    PointerPoint tap1Up  { 1, PointerDeviceType::Touch, PointerEventType::Up,   100.0f, 100.0f, 10, 10, 0.0f, 0, 0, 0, PointerButtonState::None, 1050 };
+    recognizer.ProcessPointerEvent(tap1Down);
+    recognizer.ProcessPointerEvent(tap1Up);
+
+    PRISMX_ASSERT(!events.empty());
+    PRISMX_ASSERT(events.back().type == GestureType::Tap);
+    PRISMX_ASSERT(events.back().tapCount == 1);
+
+    // Second tap for DoubleTap (within 200ms)
+    PointerPoint tap2Down{ 1, PointerDeviceType::Touch, PointerEventType::Down, 102.0f, 101.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 1200 };
+    PointerPoint tap2Up  { 1, PointerDeviceType::Touch, PointerEventType::Up,   102.0f, 101.0f, 10, 10, 0.0f, 0, 0, 0, PointerButtonState::None, 1240 };
+    recognizer.ProcessPointerEvent(tap2Down);
+    recognizer.ProcessPointerEvent(tap2Up);
+
+    PRISMX_ASSERT(events.back().type == GestureType::DoubleTap);
+    PRISMX_ASSERT(events.back().tapCount == 2);
+
+    // ------------------------------------------------------------------------
+    // Step 3: Long Press Gesture Recognition
+    // ------------------------------------------------------------------------
+    PointerPoint lpDown{ 2, PointerDeviceType::Touch, PointerEventType::Down, 200.0f, 200.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 2000 };
+    PointerPoint lpUp  { 2, PointerDeviceType::Touch, PointerEventType::Up,   201.0f, 200.0f, 10, 10, 0.0f, 0, 0, 0, PointerButtonState::None, 2600 }; // 600ms hold
+    recognizer.ProcessPointerEvent(lpDown);
+    recognizer.ProcessPointerEvent(lpUp);
+
+    PRISMX_ASSERT(events.back().type == GestureType::LongPress);
+    PRISMX_ASSERT(events.back().state == GestureState::Ended);
+
+    // ------------------------------------------------------------------------
+    // Step 4: Pan / Drag Gesture with Velocity
+    // ------------------------------------------------------------------------
+    PointerPoint panDown{ 3, PointerDeviceType::Touch, PointerEventType::Down, 300.0f, 300.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 3000 };
+    PointerPoint panMove{ 3, PointerDeviceType::Touch, PointerEventType::Move, 350.0f, 340.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 3100 };
+    PointerPoint panUp  { 3, PointerDeviceType::Touch, PointerEventType::Up,   350.0f, 340.0f, 10, 10, 0.0f, 0, 0, 0, PointerButtonState::None, 3150 };
+    recognizer.ProcessPointerEvent(panDown);
+    recognizer.ProcessPointerEvent(panMove);
+
+    bool foundPan = false;
+    for (const auto& ev : events) {
+        if (ev.type == GestureType::Pan) {
+            foundPan = true;
+            PRISMX_ASSERT(ev.deltaX > 0.0f);
+            break;
+        }
+    }
+    PRISMX_ASSERT(foundPan);
+    recognizer.ProcessPointerEvent(panUp);
+
+    // ------------------------------------------------------------------------
+    // Step 5: Multi-Touch Pinch-to-Zoom & Dual-Touch Rotation
+    // ------------------------------------------------------------------------
+    events.clear();
+    // Two fingers down: (400, 400) and (600, 400), initial distance = 200.0
+    PointerPoint f1Down{ 10, PointerDeviceType::Touch, PointerEventType::Down, 400.0f, 400.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 4000 };
+    PointerPoint f2Down{ 11, PointerDeviceType::Touch, PointerEventType::Down, 600.0f, 400.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 4000 };
+    recognizer.ProcessPointerEvent(f1Down);
+    recognizer.ProcessPointerEvent(f2Down);
+
+    // Fingers spread apart and rotate: (350, 350) and (650, 450)
+    PointerPoint f1Move{ 10, PointerDeviceType::Touch, PointerEventType::Move, 350.0f, 350.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 4050 };
+    PointerPoint f2Move{ 11, PointerDeviceType::Touch, PointerEventType::Move, 650.0f, 450.0f, 10, 10, 0.5f, 0, 0, 0, PointerButtonState::None, 4050 };
+    recognizer.ProcessPointerEvent(f1Move);
+    recognizer.ProcessPointerEvent(f2Move);
+
+    bool foundPinch = false;
+    bool foundRotate = false;
+    for (const auto& ev : events) {
+        if (ev.type == GestureType::Pinch && ev.state == GestureState::Changed) {
+            foundPinch = true;
+            PRISMX_ASSERT(ev.scale > 1.0f); // Zoom in
+        }
+        if (ev.type == GestureType::Rotate && ev.state == GestureState::Changed) {
+            foundRotate = true;
+            PRISMX_ASSERT(std::abs(ev.rotationDelta) > 0.0f);
+        }
+    }
+    PRISMX_ASSERT(foundPinch);
+    PRISMX_ASSERT(foundRotate);
+
+    // Release fingers
+    PointerPoint f1Up{ 10, PointerDeviceType::Touch, PointerEventType::Up, 350.0f, 350.0f, 10, 10, 0.0f, 0, 0, 0, PointerButtonState::None, 4100 };
+    PointerPoint f2Up{ 11, PointerDeviceType::Touch, PointerEventType::Up, 650.0f, 450.0f, 10, 10, 0.0f, 0, 0, 0, PointerButtonState::None, 4100 };
+    recognizer.ProcessPointerEvent(f1Up);
+    recognizer.ProcessPointerEvent(f2Up);
+    PRISMX_ASSERT(recognizer.GetActiveContactCount() == 0);
+
+    // ------------------------------------------------------------------------
+    // Step 6: Stylus Inking Stroke & Catmull-Rom Spline Smoothing
+    // ------------------------------------------------------------------------
+    InkStroke stroke(8.0f, PressureCurve::Soft);
+    stroke.SetColor(0.2f, 0.6f, 1.0f, 1.0f);
+
+    // Add curved trajectory with variable digitizer pressure
+    stroke.AddPoint({ 100.0f, 100.0f, 0.2f, 0.0f, 0.0f, 5000 });
+    stroke.AddPoint({ 150.0f, 180.0f, 0.5f, 5.0f, -3.0f, 5020 });
+    stroke.AddPoint({ 220.0f, 240.0f, 0.85f, 12.0f, -6.0f, 5040 });
+    stroke.AddPoint({ 300.0f, 260.0f, 0.95f, 15.0f, -8.0f, 5060 });
+    stroke.AddPoint({ 380.0f, 220.0f, 0.70f, 8.0f, -4.0f, 5080 });
+    stroke.AddPoint({ 450.0f, 150.0f, 0.30f, 2.0f, -1.0f, 5100 });
+
+    stroke.FinalizeStroke();
+
+    PRISMX_ASSERT(stroke.GetRawPoints().size() == 6);
+    PRISMX_ASSERT(stroke.GetSmoothedPoints().size() > stroke.GetRawPoints().size());
+
+    // ------------------------------------------------------------------------
+    // Step 7: GPU Triangle Strip Tessellation Verification
+    // ------------------------------------------------------------------------
+    const auto& vertices = stroke.GetTriangleStrip();
+    PRISMX_ASSERT(!vertices.empty());
+    PRISMX_ASSERT(vertices.size() % 2 == 0); // Pairs of left and right vertices
+    PRISMX_ASSERT(stroke.GetTriangleCount() > 0);
+
+    // Verify vertex attributes
+    for (const auto& v : vertices) {
+        PRISMX_ASSERT(v.strokeWidth > 0.0f);
+        PRISMX_ASSERT(v.r == 0.2f && v.g == 0.6f && v.b == 1.0f && v.a == 1.0f);
+        float normLen = std::sqrt(v.nx * v.nx + v.ny * v.ny);
+        PRISMX_ASSERT(std::abs(normLen - 1.0f) < 1e-3f);
+    }
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -1798,11 +1960,13 @@ int main() {
     if (Test_DirectComposition_Subsystem() != 0) return 1;
     if (Test_PrismComposition_VisualLayer_Subsystem() != 0) return 1;
     if (Test_PrismColor_AdvancedColor_HDR_Subsystem() != 0) return 1;
+    if (Test_PrismInput_Pointer_Gesture_And_Inking_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (13/13)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (14/14)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
 
 

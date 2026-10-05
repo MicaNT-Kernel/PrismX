@@ -27,3 +27,4 @@
 #include "prismx/dcomp.hpp"
 #include "prismx/uicomposition.hpp"
 #include "prismx/color_system.hpp"
+#include "prismx/pointer_input.hpp"
