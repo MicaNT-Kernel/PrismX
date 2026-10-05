@@ -911,6 +911,374 @@ int Test_DirectStorage_Subsystem() {
     return 0;
 }
 
+int Test_DirectML_And_DXCore_Subsystem() {
+    PRISMX_TEST("Test_DirectML_And_DXCore_Subsystem")
+        // --------------------------------------------------------------------
+        // Part 1: DXCore Modern Adapter Enumeration
+        // --------------------------------------------------------------------
+        ComPtr<IDXCoreAdapterFactory> dxcoreFactory;
+        HRESULT hr = DXCoreCreateAdapterFactory(IID_IDXCoreAdapterFactory, dxcoreFactory.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(dxcoreFactory.Get() != nullptr);
+
+        // 1. Enumerate all adapters
+        ComPtr<IDXCoreAdapterList> adapterList;
+        hr = dxcoreFactory->CreateAdapterList(0, nullptr, IID_IDXCoreAdapterList, adapterList.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(adapterList->GetAdapterCount() >= 2);
+        PRISMX_ASSERT(!adapterList->IsStale());
+
+        // 2. Query Primary Adapter Properties
+        ComPtr<IDXCoreAdapter> primaryAdapter;
+        hr = adapterList->GetAdapter(0, IID_IDXCoreAdapter, primaryAdapter.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(primaryAdapter->IsValid());
+        PRISMX_ASSERT(primaryAdapter->IsAttributeSupported(DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS));
+        PRISMX_ASSERT(primaryAdapter->IsAttributeSupported(DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE));
+
+        // Dedicated Video Memory
+        uint64_t vram = 0;
+        hr = primaryAdapter->GetProperty(DXCoreAdapterProperty::DedicatedAdapterMemory, sizeof(vram), &vram);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(vram == 16ULL * 1024 * 1024 * 1024);
+
+        // Driver Description
+        char descBuffer[128]{};
+        hr = primaryAdapter->GetProperty(DXCoreAdapterProperty::DriverDescription, sizeof(descBuffer), descBuffer);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(std::string(descBuffer).find("PrismX") != std::string::npos);
+
+        // Hardware ID
+        DXCoreHardwareID hwId{};
+        hr = primaryAdapter->GetProperty(DXCoreAdapterProperty::HardwareID, sizeof(hwId), &hwId);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(hwId.vendorID == 0x13B5);
+
+        // Memory Budget State Query
+        PRISMX_ASSERT(primaryAdapter->IsQueryStateSupported(DXCoreAdapterState::AdapterMemoryBudget));
+        DXCoreAdapterMemoryBudget budget{};
+        hr = primaryAdapter->QueryState(DXCoreAdapterState::AdapterMemoryBudget, 0, nullptr, sizeof(budget), &budget);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(budget.budget == vram);
+
+        // 3. Adapter Sorting
+        DXCoreAdapterPreference prefs[1] = { DXCoreAdapterPreference::MinimumPower };
+        hr = adapterList->Sort(1, prefs);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<IDXCoreAdapter> minPowerAdapter;
+        hr = adapterList->GetAdapter(0, IID_IDXCoreAdapter, minPowerAdapter.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        bool isIntegrated = false;
+        minPowerAdapter->GetProperty(DXCoreAdapterProperty::IsIntegrated, sizeof(isIntegrated), &isIntegrated);
+        PRISMX_ASSERT(isIntegrated == true);
+
+        // 4. LUID Retrieval
+        LUID targetLuid{ 0x1000, 0 };
+        ComPtr<IDXCoreAdapter> luidAdapter;
+        hr = dxcoreFactory->GetAdapterByLUID(targetLuid, IID_IDXCoreAdapter, luidAdapter.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(luidAdapter.Get() != nullptr);
+
+        // 5. Event Notifications
+        uint32_t cookie = 0;
+        hr = dxcoreFactory->RegisterEventNotification(
+            nullptr,
+            DXCoreNotificationType::AdapterBudgetChange,
+            [](DXCoreNotificationType, IUnknown*, void*) {},
+            nullptr,
+            &cookie
+        );
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(cookie != 0);
+
+        hr = dxcoreFactory->UnregisterEventNotification(cookie);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        // --------------------------------------------------------------------
+        // Part 2: DirectML Machine Learning & Tensor Compute Engine
+        // --------------------------------------------------------------------
+        ComPtr<ID3D12Device> d3d12Device;
+        hr = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_ID3D12Device, d3d12Device.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<IDMLDevice> dmlDevice;
+        hr = DMLCreateDevice(d3d12Device.Get(), DML_CREATE_DEVICE_FLAGS::NONE, IID_IDMLDevice, dmlDevice.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(dmlDevice.Get() != nullptr);
+
+        // Feature query
+        DML_FEATURE_DATA_FEATURE_LEVELS featLevels{};
+        hr = dmlDevice->CheckFeatureSupport(DML_FEATURE::FEATURE_LEVELS, 0, nullptr, sizeof(featLevels), &featLevels);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(featLevels.MaxSupportedFeatureLevel == DML_FEATURE_LEVEL::LEVEL_6_4);
+
+        // Tensor datatype support query
+        DML_FEATURE_DATA_TENSOR_DATA_TYPE_SUPPORT typeQuery{};
+        typeQuery.DataType = DML_TENSOR_DATA_TYPE::FLOAT32;
+        DML_FEATURE_DATA_TENSOR_DATA_TYPE_SUPPORT typeSup{};
+        hr = dmlDevice->CheckFeatureSupport(DML_FEATURE::TENSOR_DATA_TYPE_SUPPORT, sizeof(typeQuery), &typeQuery, sizeof(typeSup), &typeSup);
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(typeSup.IsSupported);
+
+        // Helper Lambda to Create Buffer Resource
+        auto CreateBuffer = [&](size_t byteSize) -> ComPtr<ID3D12Resource> {
+            D3D12_HEAP_PROPERTIES hp{};
+            hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+            D3D12_RESOURCE_DESC rd{};
+            rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            rd.Width = byteSize;
+            rd.Height = 1;
+            rd.DepthOrArraySize = 1;
+            rd.MipLevels = 1;
+            ComPtr<ID3D12Resource> res;
+            d3d12Device->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_ID3D12Resource, res.PutVoid());
+            return res;
+        };
+
+        // --------------------------------------------------------------------
+        // Operator Test 1: GEMM (Y = 1.0 * (A * B) + 1.0 * C)
+        // A: [2, 3] = [[1, 2, 3], [4, 5, 6]]
+        // B: [3, 2] = [[7, 8], [9, 1], [2, 3]]
+        // C: [2, 2] = [[1, 1], [1, 1]]
+        // Expected Y = [[32, 20], [86, 56]]
+        // --------------------------------------------------------------------
+        auto bufA = CreateBuffer(6 * sizeof(float));
+        auto bufB = CreateBuffer(6 * sizeof(float));
+        auto bufC = CreateBuffer(4 * sizeof(float));
+        auto bufY = CreateBuffer(4 * sizeof(float));
+
+        void* pMap = nullptr;
+        bufA->Map(0, nullptr, &pMap);
+        float initA[6] = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f };
+        std::memcpy(pMap, initA, sizeof(initA));
+        bufA->Unmap(0, nullptr);
+
+        bufB->Map(0, nullptr, &pMap);
+        float initB[6] = { 7.0f, 8.0f, 9.0f, 1.0f, 2.0f, 3.0f };
+        std::memcpy(pMap, initB, sizeof(initB));
+        bufB->Unmap(0, nullptr);
+
+        bufC->Map(0, nullptr, &pMap);
+        float initC[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        std::memcpy(pMap, initC, sizeof(initC));
+        bufC->Unmap(0, nullptr);
+
+        uint32_t aSizes[2] = { 2, 3 };
+        DML_BUFFER_TENSOR_DESC aBufDesc{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 2, aSizes, nullptr, sizeof(initA), 0 };
+        DML_TENSOR_DESC aDesc{ DML_TENSOR_TYPE::BUFFER, &aBufDesc };
+
+        uint32_t bSizes[2] = { 3, 2 };
+        DML_BUFFER_TENSOR_DESC bBufDesc{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 2, bSizes, nullptr, sizeof(initB), 0 };
+        DML_TENSOR_DESC bDesc{ DML_TENSOR_TYPE::BUFFER, &bBufDesc };
+
+        uint32_t cSizes[2] = { 2, 2 };
+        DML_BUFFER_TENSOR_DESC cBufDesc{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 2, cSizes, nullptr, sizeof(initC), 0 };
+        DML_TENSOR_DESC cDesc{ DML_TENSOR_TYPE::BUFFER, &cBufDesc };
+
+        uint32_t ySizes[2] = { 2, 2 };
+        DML_BUFFER_TENSOR_DESC yBufDesc{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 2, ySizes, nullptr, sizeof(float) * 4, 0 };
+        DML_TENSOR_DESC yDesc{ DML_TENSOR_TYPE::BUFFER, &yBufDesc };
+
+        DML_GEMM_OPERATOR_DESC gemmDesc{};
+        gemmDesc.ATensor = &aDesc;
+        gemmDesc.BTensor = &bDesc;
+        gemmDesc.CTensor = &cDesc;
+        gemmDesc.OutputTensor = &yDesc;
+        gemmDesc.TransA = DML_MATRIX_TRANSPOSE::NONE;
+        gemmDesc.TransB = DML_MATRIX_TRANSPOSE::NONE;
+        gemmDesc.Alpha = 1.0f;
+        gemmDesc.Beta = 1.0f;
+
+        DML_OPERATOR_DESC opDesc{};
+        opDesc.Type = DML_OPERATOR_TYPE::GEMM;
+        opDesc.Desc = &gemmDesc;
+
+        ComPtr<IDMLOperator> gemmOp;
+        hr = dmlDevice->CreateOperator(&opDesc, IID_IDMLOperator, gemmOp.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<IDMLCompiledOperator> compiledGemm;
+        hr = dmlDevice->CompileOperator(gemmOp.Get(), DML_EXECUTION_FLAGS::NONE, IID_IDMLCompiledOperator, compiledGemm.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(compiledGemm->GetBindingProperties().RequiredDescriptorCount > 0);
+
+        DML_BINDING_TABLE_DESC btableDesc{};
+        btableDesc.Dispatchable = compiledGemm.Get();
+        btableDesc.SizeInDescriptors = 1;
+
+        ComPtr<IDMLBindingTable> bindingTable;
+        hr = dmlDevice->CreateBindingTable(&btableDesc, IID_IDMLBindingTable, bindingTable.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        DML_BUFFER_BINDING inBindings[3] = {
+            { bufA.Get(), 0, 6 * sizeof(float) },
+            { bufB.Get(), 0, 6 * sizeof(float) },
+            { bufC.Get(), 0, 4 * sizeof(float) }
+        };
+        DML_BINDING_DESC inBDesc[3] = {
+            { DML_BINDING_TYPE::BUFFER, &inBindings[0] },
+            { DML_BINDING_TYPE::BUFFER, &inBindings[1] },
+            { DML_BINDING_TYPE::BUFFER, &inBindings[2] }
+        };
+        bindingTable->BindInputs(3, inBDesc);
+
+        DML_BUFFER_BINDING outBinding = { bufY.Get(), 0, 4 * sizeof(float) };
+        DML_BINDING_DESC outBDesc = { DML_BINDING_TYPE::BUFFER, &outBinding };
+        bindingTable->BindOutputs(1, &outBDesc);
+
+        ComPtr<IDMLCommandRecorder> recorder;
+        hr = dmlDevice->CreateCommandRecorder(IID_IDMLCommandRecorder, recorder.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        recorder->RecordDispatch(nullptr, compiledGemm.Get(), bindingTable.Get());
+
+        // Verify GEMM Results
+        void* pOut = nullptr;
+        bufY->Map(0, nullptr, &pOut);
+        float* pOutFloat = static_cast<float*>(pOut);
+        PRISMX_ASSERT(std::abs(pOutFloat[0] - 32.0f) < 1e-4f);
+        PRISMX_ASSERT(std::abs(pOutFloat[1] - 20.0f) < 1e-4f);
+        PRISMX_ASSERT(std::abs(pOutFloat[2] - 86.0f) < 1e-4f);
+        PRISMX_ASSERT(std::abs(pOutFloat[3] - 56.0f) < 1e-4f);
+        bufY->Unmap(0, nullptr);
+
+        // --------------------------------------------------------------------
+        // Operator Test 2: ReLU Activation (Y = max(0, X))
+        // Input: [-5.0, 0.0, 3.2, -1.0, 8.0] -> Output: [0.0, 0.0, 3.2, 0.0, 8.0]
+        // --------------------------------------------------------------------
+        auto reluIn = CreateBuffer(5 * sizeof(float));
+        auto reluOut = CreateBuffer(5 * sizeof(float));
+        reluIn->Map(0, nullptr, &pMap);
+        float inVals[5] = { -5.0f, 0.0f, 3.2f, -1.0f, 8.0f };
+        std::memcpy(pMap, inVals, sizeof(inVals));
+        reluIn->Unmap(0, nullptr);
+
+        uint32_t rSizes[1] = { 5 };
+        DML_BUFFER_TENSOR_DESC rInDesc{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 1, rSizes, nullptr, 5 * sizeof(float), 0 };
+        DML_TENSOR_DESC rInTensor{ DML_TENSOR_TYPE::BUFFER, &rInDesc };
+        DML_BUFFER_TENSOR_DESC rOutDesc{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 1, rSizes, nullptr, 5 * sizeof(float), 0 };
+        DML_TENSOR_DESC rOutTensor{ DML_TENSOR_TYPE::BUFFER, &rOutDesc };
+
+        DML_ELEMENT_WISE_RELU_OPERATOR_DESC reluDesc{ &rInTensor, &rOutTensor };
+        DML_OPERATOR_DESC rOpDesc{ DML_OPERATOR_TYPE::ELEMENT_WISE_RELU, &reluDesc };
+
+        ComPtr<IDMLOperator> reluOp;
+        hr = dmlDevice->CreateOperator(&rOpDesc, IID_IDMLOperator, reluOp.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<IDMLCompiledOperator> compRelu;
+        dmlDevice->CompileOperator(reluOp.Get(), DML_EXECUTION_FLAGS::NONE, IID_IDMLCompiledOperator, compRelu.PutVoid());
+
+        bindingTable->Reset(nullptr);
+        DML_BUFFER_BINDING rInB = { reluIn.Get(), 0, 5 * sizeof(float) };
+        DML_BINDING_DESC rInBD = { DML_BINDING_TYPE::BUFFER, &rInB };
+        bindingTable->BindInputs(1, &rInBD);
+
+        DML_BUFFER_BINDING rOutB = { reluOut.Get(), 0, 5 * sizeof(float) };
+        DML_BINDING_DESC rOutBD = { DML_BINDING_TYPE::BUFFER, &rOutB };
+        bindingTable->BindOutputs(1, &rOutBD);
+
+        recorder->RecordDispatch(nullptr, compRelu.Get(), bindingTable.Get());
+
+        reluOut->Map(0, nullptr, &pOut);
+        float* pReluRes = static_cast<float*>(pOut);
+        PRISMX_ASSERT(pReluRes[0] == 0.0f);
+        PRISMX_ASSERT(pReluRes[1] == 0.0f);
+        PRISMX_ASSERT(std::abs(pReluRes[2] - 3.2f) < 1e-4f);
+        PRISMX_ASSERT(pReluRes[3] == 0.0f);
+        PRISMX_ASSERT(pReluRes[4] == 8.0f);
+        reluOut->Unmap(0, nullptr);
+
+        // --------------------------------------------------------------------
+        // Operator Test 3: Softmax Activation (Sum = 1.0, Monotonic)
+        // Input: [1.0, 2.0, 3.0]
+        // --------------------------------------------------------------------
+        auto smIn = CreateBuffer(3 * sizeof(float));
+        auto smOut = CreateBuffer(3 * sizeof(float));
+        smIn->Map(0, nullptr, &pMap);
+        float smVals[3] = { 1.0f, 2.0f, 3.0f };
+        std::memcpy(pMap, smVals, sizeof(smVals));
+        smIn->Unmap(0, nullptr);
+
+        uint32_t smSizes[1] = { 3 };
+        DML_BUFFER_TENSOR_DESC smDescIn{ DML_TENSOR_DATA_TYPE::FLOAT32, DML_TENSOR_FLAGS::NONE, 1, smSizes, nullptr, 3 * sizeof(float), 0 };
+        DML_TENSOR_DESC smTensorIn{ DML_TENSOR_TYPE::BUFFER, &smDescIn };
+        DML_ACTIVATION_SOFTMAX_OPERATOR_DESC softmaxDesc{ &smTensorIn, &smTensorIn };
+        DML_OPERATOR_DESC smOpDesc{ DML_OPERATOR_TYPE::ACTIVATION_SOFTMAX, &softmaxDesc };
+
+        ComPtr<IDMLOperator> smOp;
+        dmlDevice->CreateOperator(&smOpDesc, IID_IDMLOperator, smOp.PutVoid());
+        ComPtr<IDMLCompiledOperator> compSm;
+        dmlDevice->CompileOperator(smOp.Get(), DML_EXECUTION_FLAGS::NONE, IID_IDMLCompiledOperator, compSm.PutVoid());
+
+        DML_BUFFER_BINDING smInB = { smIn.Get(), 0, 3 * sizeof(float) };
+        DML_BINDING_DESC smInBD = { DML_BINDING_TYPE::BUFFER, &smInB };
+        bindingTable->BindInputs(1, &smInBD);
+        DML_BUFFER_BINDING smOutB = { smOut.Get(), 0, 3 * sizeof(float) };
+        DML_BINDING_DESC smOutBD = { DML_BINDING_TYPE::BUFFER, &smOutB };
+        bindingTable->BindOutputs(1, &smOutBD);
+
+        recorder->RecordDispatch(nullptr, compSm.Get(), bindingTable.Get());
+
+        smOut->Map(0, nullptr, &pOut);
+        float* pSmRes = static_cast<float*>(pOut);
+        float sum = pSmRes[0] + pSmRes[1] + pSmRes[2];
+        PRISMX_ASSERT(std::abs(sum - 1.0f) < 1e-4f);
+        PRISMX_ASSERT(pSmRes[0] < pSmRes[1] && pSmRes[1] < pSmRes[2]);
+        smOut->Unmap(0, nullptr);
+
+        // --------------------------------------------------------------------
+        // Operator Test 4: Element-Wise Add & Multiply
+        // --------------------------------------------------------------------
+        auto ewInA = CreateBuffer(3 * sizeof(float));
+        auto ewInB = CreateBuffer(3 * sizeof(float));
+        auto ewOutAdd = CreateBuffer(3 * sizeof(float));
+        auto ewOutMul = CreateBuffer(3 * sizeof(float));
+
+        ewInA->Map(0, nullptr, &pMap);
+        float valA[3] = { 2.0f, 4.0f, 6.0f };
+        std::memcpy(pMap, valA, sizeof(valA));
+        ewInA->Unmap(0, nullptr);
+
+        ewInB->Map(0, nullptr, &pMap);
+        float valB[3] = { 3.0f, 5.0f, 7.0f };
+        std::memcpy(pMap, valB, sizeof(valB));
+        ewInB->Unmap(0, nullptr);
+
+        DML_ELEMENT_WISE_ADD_OPERATOR_DESC addDesc{ &smTensorIn, &smTensorIn, &smTensorIn };
+        DML_OPERATOR_DESC addOpDesc{ DML_OPERATOR_TYPE::ELEMENT_WISE_ADD, &addDesc };
+        ComPtr<IDMLOperator> addOp;
+        dmlDevice->CreateOperator(&addOpDesc, IID_IDMLOperator, addOp.PutVoid());
+        ComPtr<IDMLCompiledOperator> compAdd;
+        dmlDevice->CompileOperator(addOp.Get(), DML_EXECUTION_FLAGS::NONE, IID_IDMLCompiledOperator, compAdd.PutVoid());
+
+        DML_BUFFER_BINDING addInB[2] = {
+            { ewInA.Get(), 0, 3 * sizeof(float) },
+            { ewInB.Get(), 0, 3 * sizeof(float) }
+        };
+        DML_BINDING_DESC addInBD[2] = {
+            { DML_BINDING_TYPE::BUFFER, &addInB[0] },
+            { DML_BINDING_TYPE::BUFFER, &addInB[1] }
+        };
+        bindingTable->BindInputs(2, addInBD);
+        DML_BUFFER_BINDING addOutB = { ewOutAdd.Get(), 0, 3 * sizeof(float) };
+        DML_BINDING_DESC addOutBD = { DML_BINDING_TYPE::BUFFER, &addOutB };
+        bindingTable->BindOutputs(1, &addOutBD);
+
+        recorder->RecordDispatch(nullptr, compAdd.Get(), bindingTable.Get());
+
+        ewOutAdd->Map(0, nullptr, &pOut);
+        float* pAddRes = static_cast<float*>(pOut);
+        PRISMX_ASSERT(pAddRes[0] == 5.0f);
+        PRISMX_ASSERT(pAddRes[1] == 9.0f);
+        PRISMX_ASSERT(pAddRes[2] == 13.0f);
+        ewOutAdd->Unmap(0, nullptr);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -925,9 +1293,10 @@ int main() {
     if (Test_3DMath_And_Transformations() != 0) return 1;
     if (Test_DirectX_Raytracing_And_MeshShaders() != 0) return 1;
     if (Test_DirectStorage_Subsystem() != 0) return 1;
+    if (Test_DirectML_And_DXCore_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (9/9 PASS) \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (10/10)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

@@ -22,3 +22,5 @@
 #include "prismx/d3d12raytracing.hpp"
 #include "prismx/dxr.hpp"
 #include "prismx/dstorage.hpp"
+#include "prismx/dxcore.hpp"
+#include "prismx/directml.hpp"

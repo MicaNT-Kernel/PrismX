@@ -101,6 +101,23 @@ graph TD
 - **Parallel Decompression Codecs**: Clean-room GDeflate (`DSTORAGE_COMPRESSION_FORMAT_GDEFLATE`), Zlib, and raw stream uncompressed pipelines.
 - **Status & Timeline Fences**: Atomic status array notification tokens and asynchronous `ID3D12Fence` signal synchronization.
 
+### 8. DXCore Modern Adapter Enumeration (`prismx/dxcore.hpp`)
+- **Modern Device Discovery**: `IDXCoreAdapterFactory`, `IDXCoreAdapterList`, `IDXCoreAdapter`.
+- **Low-Overhead Compute Enumeration**: Lightweight GPU/NPU enumeration decoupled from DXGI desktop swapchains, ideal for headless AI and compute workloads.
+- **Hardware Telemetry**: Query dedicated video memory, driver versions, LUIDs, hardware IDs, preemption granularities, and memory budgets.
+- **Preference Sorting & Filtering**: Filter adapters by D3D12 graphics, core compute, or WSL attributes; sort by HighPerformance or MinimumPower.
+
+### 9. DirectML Machine Learning & Tensor Execution Pipeline (`prismx/directml.hpp`)
+- **DirectML Architecture**: `IDMLDevice`, `IDMLDevice1`, `IDMLOperator`, `IDMLCompiledOperator`, `IDMLBindingTable`, `IDMLCommandRecorder`.
+- **Direct3D 12 Integration**: Binds tensor inputs/outputs directly to Direct3D 12 buffers (`ID3D12Resource`) with zero CPU-GPU copy penalties.
+- **Comprehensive Tensor Operator Set**:
+  - **GEMM**: General Matrix Multiplication ($Y = \alpha AB + \beta C$) with transpositions and fused activations.
+  - **ReLU**: Rectified linear unit activation ($Y = \max(0, X)$).
+  - **Softmax**: Numerically stable normalized exponential distributions.
+  - **2D Spatial Convolution**: Multi-channel convolution with kernel strides, padding, dilations, and bias.
+  - **Batch Normalization**: Spatial channel normalization with scaling and shifting ($Y = \frac{X - \mu}{\sqrt{\sigma^2 + \epsilon}} \gamma + \beta$).
+  - **Element-Wise Math**: High-speed addition and multiplication tensor passes.
+
 ---
 
 ## Clean-Room Guarantees
