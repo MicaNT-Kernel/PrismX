@@ -94,6 +94,13 @@ graph TD
 - **Intersection Engine**: Clean-room Möller-Trumbore ray-triangle intersection solver simulating primary rays via `DispatchRays`.
 - **Mesh Shader Amplification**: Next-generation geometry pipeline amplifying threadgroups into meshlet primitives via `DispatchMesh`.
 
+### 7. DirectStorage & GPU Decompression Pipeline (`prismx/dstorage.hpp`)
+- **DirectStorage 1.2 Architecture**: `IDStorageFactory`, `IDStorageQueue`, `IDStorageFile`, `IDStorageStatusArray`, `IDStorageCustomDecompressionQueue`.
+- **NVMe Storage Bypass**: Asynchronous storage request pipeline bypassing OS file system abstractions and CPU caching bottlenecks.
+- **Direct GPU Routing**: Direct memory copy into Direct3D 12 buffer and texture subresources (`ID3D12Resource`).
+- **Parallel Decompression Codecs**: Clean-room GDeflate (`DSTORAGE_COMPRESSION_FORMAT_GDEFLATE`), Zlib, and raw stream uncompressed pipelines.
+- **Status & Timeline Fences**: Atomic status array notification tokens and asynchronous `ID3D12Fence` signal synchronization.
+
 ---
 
 ## Clean-Room Guarantees

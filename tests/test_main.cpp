@@ -685,6 +685,232 @@ int Test_DirectX_Raytracing_And_MeshShaders() {
     return 0;
 }
 
+// ============================================================================
+// Suite 9: DirectStorage High-Performance GPU I/O Subsystem
+// ============================================================================
+int Test_DirectStorage_Subsystem() {
+    PRISMX_TEST("Test_DirectStorage_Subsystem")
+        // 1. Factory Acquisition
+        ComPtr<IDStorageFactory> factory;
+        HRESULT hr = DStorageGetFactory(IID_IDStorageFactory, factory.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(factory.Get() != nullptr);
+
+        // 2. Configuration & Staging Buffer
+        factory->SetStagingBufferSize(64 * 1024 * 1024);
+        factory->SetDebugFlags(DSTORAGE_DEBUG_SHOW_ERRORS);
+
+        // 3. Status Array Creation & Inspection
+        ComPtr<IDStorageStatusArray> statusArray;
+        hr = factory->CreateStatusArray(16, "PrismStatusArray", IID_IDStorageStatusArray, statusArray.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(!statusArray->IsComplete(0));
+        PRISMX_ASSERT(!statusArray->IsComplete(1));
+
+        // 4. Direct3D 12 Device, Resource & Fence Creation
+        ComPtr<ID3D12Device> device;
+        hr = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_ID3D12Device, device.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        D3D12_HEAP_PROPERTIES heapProps{};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        D3D12_RESOURCE_DESC resDesc{};
+        resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        resDesc.Width = 65536; // 64 KB
+        resDesc.Height = 1;
+        resDesc.DepthOrArraySize = 1;
+        resDesc.MipLevels = 1;
+
+        ComPtr<ID3D12Resource> gpuBuffer;
+        hr = device->CreateCommittedResource(
+            &heapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &resDesc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_ID3D12Resource,
+            gpuBuffer.PutVoid()
+        );
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        ComPtr<ID3D12Fence> fence;
+        hr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_ID3D12Fence, fence.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(fence->GetCompletedValue() == 0);
+
+        // 5. Memory-Source DirectStorage Queue Creation
+        DSTORAGE_QUEUE_DESC qDesc{};
+        qDesc.SourceType = DSTORAGE_REQUEST_SOURCE_MEMORY;
+        qDesc.Capacity = 128;
+        qDesc.Priority = DSTORAGE_PRIORITY_NORMAL;
+        qDesc.Name = "PrismX_MemQueue";
+        qDesc.Device = device.Get();
+
+        ComPtr<IDStorageQueue> memQueue;
+        hr = factory->CreateQueue(&qDesc, IID_IDStorageQueue, memQueue.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        // 6. Direct Memory-to-GPU Buffer Request (Uncompressed)
+        std::vector<uint8_t> uncompressedData(4096);
+        for (size_t i = 0; i < uncompressedData.size(); ++i) {
+            uncompressedData[i] = static_cast<uint8_t>((i * 7 + 13) & 0xFF);
+        }
+
+        DSTORAGE_REQUEST req1{};
+        req1.Options.SourceType = DSTORAGE_REQUEST_SOURCE_MEMORY;
+        req1.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+        req1.Options.Compression = DSTORAGE_COMPRESSION_FORMAT_NONE;
+        req1.Source.Memory.Source = uncompressedData.data();
+        req1.Source.Memory.Size = static_cast<uint32_t>(uncompressedData.size());
+        req1.Destination.Buffer.Resource = gpuBuffer.Get();
+        req1.Destination.Buffer.Offset = 0;
+        req1.Destination.Buffer.Size = static_cast<uint32_t>(uncompressedData.size());
+        req1.UncompressedSize = static_cast<uint32_t>(uncompressedData.size());
+
+        memQueue->EnqueueRequest(&req1);
+        memQueue->EnqueueStatus(statusArray.Get(), 0);
+        memQueue->EnqueueSignal(fence.Get(), 100);
+        memQueue->Submit();
+
+        PRISMX_ASSERT(statusArray->IsComplete(0));
+        PRISMX_ASSERT(statusArray->GetHResult(0) == S_OK);
+        PRISMX_ASSERT(fence->GetCompletedValue() == 100);
+
+        // Verify data in GPU buffer
+        void* mapped = nullptr;
+        gpuBuffer->Map(0, nullptr, &mapped);
+        PRISMX_ASSERT(mapped != nullptr);
+        PRISMX_ASSERT(std::memcmp(mapped, uncompressedData.data(), uncompressedData.size()) == 0);
+        gpuBuffer->Unmap(0, nullptr);
+
+        // 7. GDeflate Compression & Direct GPU Decompression
+        std::vector<uint8_t> originalTexture(8192);
+        for (size_t i = 0; i < originalTexture.size(); ++i) {
+            // Highly compressible pattern
+            originalTexture[i] = static_cast<uint8_t>((i / 16) & 0xFF);
+        }
+
+        auto gdefCompressed = codec::CompressGDeflate(originalTexture.data(), static_cast<uint32_t>(originalTexture.size()));
+        PRISMX_ASSERT(!gdefCompressed.empty());
+        PRISMX_ASSERT(gdefCompressed.size() < originalTexture.size());
+
+        DSTORAGE_REQUEST reqGDef{};
+        reqGDef.Options.SourceType = DSTORAGE_REQUEST_SOURCE_MEMORY;
+        reqGDef.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_BUFFER;
+        reqGDef.Options.Compression = DSTORAGE_COMPRESSION_FORMAT_GDEFLATE;
+        reqGDef.Source.Memory.Source = gdefCompressed.data();
+        reqGDef.Source.Memory.Size = static_cast<uint32_t>(gdefCompressed.size());
+        reqGDef.Destination.Buffer.Resource = gpuBuffer.Get();
+        reqGDef.Destination.Buffer.Offset = 4096;
+        reqGDef.Destination.Buffer.Size = static_cast<uint32_t>(originalTexture.size());
+        reqGDef.UncompressedSize = static_cast<uint32_t>(originalTexture.size());
+
+        memQueue->EnqueueRequest(&reqGDef);
+        memQueue->EnqueueStatus(statusArray.Get(), 1);
+        memQueue->EnqueueSignal(fence.Get(), 200);
+        memQueue->Submit();
+
+        PRISMX_ASSERT(statusArray->IsComplete(1));
+        PRISMX_ASSERT(statusArray->GetHResult(1) == S_OK);
+        PRISMX_ASSERT(fence->GetCompletedValue() == 200);
+
+        // Verify decompressed output in GPU buffer
+        gpuBuffer->Map(0, nullptr, &mapped);
+        PRISMX_ASSERT(std::memcmp(static_cast<uint8_t*>(mapped) + 4096, originalTexture.data(), originalTexture.size()) == 0);
+        gpuBuffer->Unmap(0, nullptr);
+
+        // 8. Zlib Compression & Decompression Pipeline
+        auto zlibCompressed = codec::CompressZlib(originalTexture.data(), static_cast<uint32_t>(originalTexture.size()));
+        PRISMX_ASSERT(!zlibCompressed.empty());
+
+        std::vector<uint8_t> zlibDecompressed(originalTexture.size(), 0);
+        DSTORAGE_REQUEST reqZlib{};
+        reqZlib.Options.SourceType = DSTORAGE_REQUEST_SOURCE_MEMORY;
+        reqZlib.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MEMORY;
+        reqZlib.Options.Compression = DSTORAGE_COMPRESSION_FORMAT_ZLIB;
+        reqZlib.Source.Memory.Source = zlibCompressed.data();
+        reqZlib.Source.Memory.Size = static_cast<uint32_t>(zlibCompressed.size());
+        reqZlib.Destination.Memory.Buffer = zlibDecompressed.data();
+        reqZlib.Destination.Memory.Size = static_cast<uint32_t>(zlibDecompressed.size());
+        reqZlib.UncompressedSize = static_cast<uint32_t>(originalTexture.size());
+
+        memQueue->EnqueueRequest(&reqZlib);
+        memQueue->EnqueueStatus(statusArray.Get(), 2);
+        memQueue->EnqueueSignal(fence.Get(), 300);
+        memQueue->Submit();
+
+        PRISMX_ASSERT(statusArray->IsComplete(2));
+        PRISMX_ASSERT(fence->GetCompletedValue() == 300);
+        PRISMX_ASSERT(std::memcmp(zlibDecompressed.data(), originalTexture.data(), originalTexture.size()) == 0);
+
+        // 9. Virtual File System & File Queue
+        auto* pFactoryImpl = static_cast<PrismStorageFactoryImpl*>(factory.Get());
+        std::vector<uint8_t> fileAsset(16384, 0x42);
+        pFactoryImpl->RegisterVirtualFile(L"C:\\game\\mesh_geometry.bin", fileAsset);
+
+        ComPtr<IDStorageFile> storageFile;
+        hr = factory->OpenFile(L"C:\\game\\mesh_geometry.bin", IID_IDStorageFile, storageFile.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(storageFile->GetFileSize() == 16384);
+
+        DSTORAGE_QUEUE_DESC fileQDesc{};
+        fileQDesc.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+        fileQDesc.Capacity = 64;
+        fileQDesc.Priority = DSTORAGE_PRIORITY_HIGH;
+        fileQDesc.Name = "PrismX_FileQueue";
+        fileQDesc.Device = device.Get();
+
+        ComPtr<IDStorageQueue> fileQueue;
+        hr = factory->CreateQueue(&fileQDesc, IID_IDStorageQueue, fileQueue.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+
+        std::vector<uint8_t> readFromDisk(16384, 0);
+        DSTORAGE_REQUEST reqFile{};
+        reqFile.Options.SourceType = DSTORAGE_REQUEST_SOURCE_FILE;
+        reqFile.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MEMORY;
+        reqFile.Options.Compression = DSTORAGE_COMPRESSION_FORMAT_NONE;
+        reqFile.Source.File.Source = storageFile.Get();
+        reqFile.Source.File.Offset = 0;
+        reqFile.Source.File.Size = 16384;
+        reqFile.Destination.Memory.Buffer = readFromDisk.data();
+        reqFile.Destination.Memory.Size = 16384;
+        reqFile.UncompressedSize = 16384;
+
+        fileQueue->EnqueueRequest(&reqFile);
+        fileQueue->EnqueueStatus(statusArray.Get(), 3);
+        fileQueue->EnqueueSignal(fence.Get(), 400);
+        fileQueue->Submit();
+
+        PRISMX_ASSERT(statusArray->IsComplete(3));
+        PRISMX_ASSERT(fence->GetCompletedValue() == 400);
+        PRISMX_ASSERT(readFromDisk == fileAsset);
+
+        // 10. Tag-Based Request Cancellation Filtering
+        DSTORAGE_REQUEST reqCancel{};
+        reqCancel.CancellationTag = 0xCAFE;
+        reqCancel.Options.SourceType = DSTORAGE_REQUEST_SOURCE_MEMORY;
+        reqCancel.Options.DestinationType = DSTORAGE_REQUEST_DESTINATION_MEMORY;
+        reqCancel.Options.Compression = DSTORAGE_COMPRESSION_FORMAT_NONE;
+        reqCancel.Source.Memory.Source = uncompressedData.data();
+        reqCancel.Source.Memory.Size = 100;
+        reqCancel.Destination.Memory.Buffer = readFromDisk.data();
+        reqCancel.Destination.Memory.Size = 100;
+
+        fileQueue->EnqueueRequest(&reqCancel);
+        fileQueue->CancelRequestsWithTag(0xFFFF, 0xCAFE);
+        fileQueue->Submit();
+
+        // 11. Custom Decompression Queue
+        ComPtr<IDStorageCustomDecompressionQueue> customQueue;
+        hr = factory->QueryInterface(IID_IDStorageCustomDecompressionQueue, customQueue.PutVoid());
+        PRISMX_ASSERT(SUCCEEDED(hr));
+        PRISMX_ASSERT(customQueue->GetEvent() != nullptr);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -698,9 +924,10 @@ int main() {
     if (Test_DirectX_Audio_And_Input() != 0) return 1;
     if (Test_3DMath_And_Transformations() != 0) return 1;
     if (Test_DirectX_Raytracing_And_MeshShaders() != 0) return 1;
+    if (Test_DirectStorage_Subsystem() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (8/8 PASS) \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (9/9 PASS) \n";
     std::cout << "========================================================\n";
     return 0;
 }

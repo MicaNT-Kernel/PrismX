@@ -21,3 +21,4 @@
 #include "prismx/xinput.hpp"
 #include "prismx/d3d12raytracing.hpp"
 #include "prismx/dxr.hpp"
+#include "prismx/dstorage.hpp"
