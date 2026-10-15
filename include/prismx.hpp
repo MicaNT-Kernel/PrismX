@@ -35,4 +35,7 @@
 #include "prismx/dxc_gdeflate_directml_bridge.hpp"
 #include "prismx/agility_dred_vulkanon12_video.hpp"
 #include "prismx/live_3d_scene_renderer.hpp"
+#include "prismx/directsr_vrs_rebar.hpp"
+#include "prismx/gpu_driven_indirect_sampler_feedback.hpp"
+#include "prismx/gameinput_spatial_audio_classic_ddraw.hpp"
 

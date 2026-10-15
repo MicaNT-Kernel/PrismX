@@ -2782,6 +2782,162 @@ int Test_PrismX_Live_3D_Scene_Renderer_And_GOP_FrameGraph() {
     return 0;
 }
 
+int Test_PrismX_DirectSR_VRS_Tier2_And_ResizableBAR_GpuUploadHeap() {
+    PRISMX_TEST("Test_PrismX_DirectSR_VRS_Tier2_And_ResizableBAR_GpuUploadHeap")
+
+    using namespace prismx::Gaming;
+
+    // 1. DirectSR (IDSRDevice, IDSRSuperResEngine, IDSRSuperResUpscaler, Halton Jitter)
+    ComPtr<ID3D12Device> device;
+    PRISMX_ASSERT(SUCCEEDED(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_ID3D12Device, device.PutVoid())));
+
+    D3D12_COMMAND_QUEUE_DESC qDesc{};
+    qDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    ComPtr<ID3D12CommandQueue> queue;
+    PRISMX_ASSERT(SUCCEEDED(device->CreateCommandQueue(&qDesc, IID_ID3D12CommandQueue, queue.PutVoid())));
+
+    ComPtr<ID3D12CommandAllocator> alloc;
+    PRISMX_ASSERT(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_ID3D12CommandAllocator, alloc.PutVoid())));
+    ComPtr<ID3D12GraphicsCommandList> cmdList;
+    PRISMX_ASSERT(SUCCEEDED(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, alloc.Get(), nullptr, IID_ID3D12GraphicsCommandList, cmdList.PutVoid())));
+
+    IDSRDevice dsrDevice;
+    PRISMX_ASSERT(dsrDevice.GetNumSuperResVariants() == 3);
+    DSR_SUPERRES_VARIANT_DESC varDesc{};
+    PRISMX_ASSERT(SUCCEEDED(dsrDevice.GetSuperResVariantDesc(0, &varDesc)));
+    PRISMX_ASSERT((varDesc.Flags & DSR_SUPERRES_VARIANT_FLAG_NATIVE) != 0);
+
+    DSR_SUPERRES_CREATE_ENGINE_PARAMETERS engParams{};
+    engParams.VariantId           = varDesc.VariantId;
+    engParams.TargetFormat        = DXGI_FORMAT_R8G8B8A8_UNORM;
+    engParams.SourceColorFormat   = DXGI_FORMAT_R8G8B8A8_UNORM;
+    engParams.SourceDepthFormat   = DXGI_FORMAT_D32_FLOAT;
+    engParams.MotionVectorsFormat = DXGI_FORMAT_R32G32_FLOAT;
+    engParams.MaxSourceSize       = {1920, 1080};
+    engParams.TargetSize          = {3840, 2160};
+
+    IDSRSuperResEngine* srEngine = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dsrDevice.CreateSuperResEngine(&engParams, &srEngine)) && srEngine != nullptr);
+
+    uint32_t jitterLen = 0;
+    PRISMX_ASSERT(SUCCEEDED(srEngine->GetOptimalJitterPattern({1920, 1080}, {3840, 2160}, &jitterLen, nullptr)));
+    PRISMX_ASSERT(jitterLen == 32);
+    std::vector<DSR_FLOAT2> jitterPattern(jitterLen);
+    PRISMX_ASSERT(SUCCEEDED(srEngine->GetOptimalJitterPattern({1920, 1080}, {3840, 2160}, &jitterLen, jitterPattern.data())));
+
+    IDSRSuperResUpscaler* upscaler = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(srEngine->CreateUpscaler(queue.Get(), &upscaler)) && upscaler != nullptr);
+
+    DSR_SUPERRES_UPSCALER_EXECUTE_PARAMETERS execParams{};
+    execParams.SourceSize          = {1920, 1080};
+    execParams.CameraJitter        = jitterPattern[0];
+    execParams.MotionVectorScale   = {1.0f, 1.0f};
+    execParams.Sharpness           = 0.75f;
+    execParams.TimeDeltaInSeconds  = 1.0f / 540.0f;
+    execParams.PreExposure         = 1.0f;
+    execParams.CameraNear          = 0.1f;
+    execParams.CameraFar           = 1000.0f;
+    execParams.CameraFovAngleVert  = 1.0472f;
+    execParams.Flags               = DSR_SUPERRES_UPSCALER_EXECUTE_FLAG_RESET_HISTORY;
+
+    PRISMX_ASSERT(SUCCEEDED(upscaler->Execute(cmdList.Get(), &execParams)));
+    PRISMX_ASSERT(upscaler->GetExecutedFrames() == 1 && upscaler->IsResident());
+
+    delete upscaler;
+    delete srEngine;
+
+    // 2. Variable Rate Shading Tier 2 (VariableRateShading.md)
+    D3D12_SHADING_RATE_COMBINER combiners[2] = {
+        D3D12_SHADING_RATE_COMBINER_PASSTHROUGH,
+        D3D12_SHADING_RATE_COMBINER_MAX
+    };
+    auto vrs = PrismXVariableRateShadingEngine::BuildFoveatedShadingRateImage(
+        3840, 2160, D3D12_SHADING_RATE_1X1, combiners
+    );
+    PRISMX_ASSERT(vrs.tierSupported == D3D12_VARIABLE_SHADING_RATE_TIER_2);
+    PRISMX_ASSERT(vrs.shadingRateImageTileSize == 16 && vrs.additionalShadingRatesSupported);
+    PRISMX_ASSERT(vrs.totalScreenTiles == 32400);
+    PRISMX_ASSERT(vrs.pixelShaderInvocationSavingsPercent >= 50);
+
+    // 3. D3D12 GPU Upload Heaps / Resizable BAR (D3D12GPUUploadHeaps.md)
+    auto rebar = PrismXResizableBarGpuUploadHeap::VerifyDirectCpuToVramUpload(65536);
+    PRISMX_ASSERT(rebar.gpuUploadHeapSupported);
+    PRISMX_ASSERT(rebar.cpuPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE_EXT);
+    PRISMX_ASSERT(rebar.memoryPoolPreference == D3D12_MEMORY_POOL_L1_EXT);
+    PRISMX_ASSERT(rebar.directCpuToVramBytesWritten == 65536 && rebar.pcieStagingCopiesRequired == 0);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_ExecuteIndirect_NaniteCulling_And_SamplerFeedback_TiledTier4() {
+    PRISMX_TEST("Test_PrismX_ExecuteIndirect_NaniteCulling_And_SamplerFeedback_TiledTier4")
+
+    using namespace prismx::Gaming;
+
+    // 1. ExecuteIndirect Tier 1.1 GPU-Driven Culling & MultiDrawIndirect (IndirectDrawing.md)
+    auto ind = PrismXGpuDrivenIndirectPipeline::ExecuteGpuDrivenSceneCullingAndIndirectDraw(1024);
+    PRISMX_ASSERT(ind.commandSignatureValid && ind.byteStride == sizeof(PrismXNaniteIndirectDrawCommand));
+    PRISMX_ASSERT(ind.totalInputMeshClusters == 1024);
+    PRISMX_ASSERT(ind.frustumAndHiZCulledClusters > 200);
+    PRISMX_ASSERT(ind.survivingIndirectDrawsExecuted + ind.frustumAndHiZCulledClusters == 1024);
+    PRISMX_ASSERT(ind.cpuDrawCallSubmissionCount == 1);
+
+    // 2. Sampler Feedback Tier 1.0 & Tiled Resources Tier 4 (SamplerFeedback.md)
+    auto sfs = PrismXSamplerFeedbackStreamingEngine::ExecuteVirtualTextureFeedbackPass(16384, 16384);
+    PRISMX_ASSERT(sfs.samplerFeedbackTier == D3D12_SAMPLER_FEEDBACK_TIER_1_0);
+    PRISMX_ASSERT(sfs.tiledResourcesTier == D3D12_TILED_RESOURCES_TIER_4);
+    PRISMX_ASSERT(sfs.totalVirtual64KbTiles == 4096 && sfs.resident64KbTilesMapped == 512);
+    PRISMX_ASSERT(sfs.vramSavedBytes > 200ULL * 1024ULL * 1024ULL);
+    PRISMX_ASSERT(sfs.minMipFeedbackResolved && sfs.texturePopInEvents == 0);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_GameInput_8000Hz_StateObjectDB_PIX_And_ClassicDDraw7_D3D8() {
+    PRISMX_TEST("Test_PrismX_GameInput_8000Hz_StateObjectDB_PIX_And_ClassicDDraw7_D3D8")
+
+    using namespace prismx::Gaming;
+
+    // 1. GameInput 8000Hz Raw Mouse + Gamepad + 4-Motor Impulse Trigger Haptics
+    IGameInput gameInput;
+    IGameInputDevice device;
+    IGameInputReading* reading = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(gameInput.GetCurrentReading(GameInputKindMouse | GameInputKindGamepad, &device, &reading)) && reading != nullptr);
+    GameInputMouseState mouse{};
+    GameInputGamepadState pad{};
+    PRISMX_ASSERT(reading->GetMouseState(&mouse) && mouse.positionX == 640);
+    PRISMX_ASSERT(reading->GetGamepadState(&pad) && pad.rightTrigger > 0.9f);
+    PRISMX_ASSERT(gameInput.GetPollingRateHz() == 8000 && gameInput.GetInputToPhotonLatencyUs() < 125);
+    delete reading;
+
+    GameInputRumbleParams rumble{0.6f, 0.8f, 0.4f, 0.9f};
+    device.SetRumbleState(&rumble);
+    PRISMX_ASSERT(device.IsHapticsActive());
+
+    // 2. StateObjectDatabase.md + D3D12PIXMarkers.md + CountersAndQueries.md
+    ID3D12StateObjectDatabase stateDb;
+    const uint8_t dummyStateBlob[256] = {0x44, 0x58, 0x49, 0x4C};
+    PRISMX_ASSERT(SUCCEEDED(stateDb.StoreStateObjectDesc("UE5_Lumen_RayTracing_StateObject", dummyStateBlob, sizeof(dummyStateBlob))));
+    size_t foundSize = 0;
+    PRISMX_ASSERT(SUCCEEDED(stateDb.FindStateObjectDesc("UE5_Lumen_RayTracing_StateObject", &foundSize)) && foundSize == 256);
+
+    PrismXPixAndQueryProfiler pix;
+    pix.BeginEvent(0xFF00E5FFULL, "Nanite::BasePass");
+    pix.EndEvent();
+    auto stats = pix.ResolvePipelineStatistics();
+    PRISMX_ASSERT(pix.GetTotalEventsRecorded() == 1 && stats.MSPrimitives == 131072ULL);
+
+    // 3. Classic PC Gaming Bridge (DirectDraw 7 + Direct3D 8 -> PrismX D3D12)
+    auto classic = PrismXClassicDirectDraw7AndD3D8Bridge::ExecuteClassicGameFrameTranslation(640, 480, 3840, 2160);
+    PRISMX_ASSERT(classic.ddraw7PrimaryAndBackSurfaceCreated && classic.ddraw7ColorKeyAnd8BitPaletteUpscaled);
+    PRISMX_ASSERT(classic.d3d8DeviceAndFvfVertexShaderTranslated && classic.translatedD3D12DrawCalls == 64);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2808,12 +2964,16 @@ int main() {
     if (Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution() != 0) return 1;
     if (Test_PrismX_EnhancedBarriers_VulkanOn12_VideoAV1_And_DRED_ZeroTDR() != 0) return 1;
     if (Test_PrismX_Live_3D_Scene_Renderer_And_GOP_FrameGraph() != 0) return 1;
+    if (Test_PrismX_DirectSR_VRS_Tier2_And_ResizableBAR_GpuUploadHeap() != 0) return 1;
+    if (Test_PrismX_ExecuteIndirect_NaniteCulling_And_SamplerFeedback_TiledTier4() != 0) return 1;
+    if (Test_PrismX_GameInput_8000Hz_StateObjectDB_PIX_And_ClassicDDraw7_D3D8() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (21/21)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (24/24)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
 
 
 
