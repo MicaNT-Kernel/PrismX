@@ -41,5 +41,9 @@
 #include "prismx/hlsl_fxc_dxbc_compiler_sm51.hpp"
 #include "prismx/dxil_sm69_container_wave_vm.hpp"
 #include "prismx/spirv_dxil_cross_translator.hpp"
+#include "prismx/anticheat_eac_battleye_swapchain_guard.hpp"
+#include "prismx/vanguard_ricochet_iommu_vram_shield.hpp"
+#include "prismx/gaming_drm_denuvo_hwid_privacy_seal.hpp"
+
 
 

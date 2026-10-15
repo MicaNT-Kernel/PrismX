@@ -3031,6 +3031,59 @@ int Test_PrismX_SPIRV16_DXIL_CrossTranslator_And_RootSignatureRemap() {
     return 0;
 }
 
+int Test_PrismX_Ring0_AntiCheat_EAC_BattlEye_And_SwapChainGuard() {
+    PRISMX_TEST("Test_PrismX_Ring0_AntiCheat_EAC_BattlEye_And_SwapChainGuard")
+
+    using namespace prismx::AntiCheat;
+
+    EacBattlEyeBridgeReport rep{};
+    PRISMX_ASSERT(SUCCEEDED(PrismEacBattlEyeKernelBridge::VerifyEacBattlEyeAndSwapChainIntegrity(&rep)));
+    PRISMX_ASSERT(rep.obRegisterCallbacksActive && rep.registeredAltitude == 328000u);
+    PRISMX_ASSERT(rep.strippedHandleAttempts == 2u);
+    PRISMX_ASSERT(rep.preservedCsrssQueryAccess == PRISM_PROCESS_QUERY_LIMITED_INFORMATION);
+    PRISMX_ASSERT(rep.blockedUnsignedRemoteThreads == 2u && rep.verifiedSignedGameModules == 6u);
+    PRISMX_ASSERT(rep.swapChainPresentVtableIntact && rep.whitelistedOverlaysAllowed == 3u && rep.unauthorizedInlineHooksHealed == 1u);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_Vanguard_Ricochet_HVCI_TPM20_And_IOMMU_VramShield() {
+    PRISMX_TEST("Test_PrismX_Vanguard_Ricochet_HVCI_TPM20_And_IOMMU_VramShield")
+
+    using namespace prismx::AntiCheat;
+
+    VanguardRicochetIommuReport rep{};
+    PRISMX_ASSERT(SUCCEEDED(PrismVanguardRicochetIommuShield::VerifyVanguardRicochetAndIommuVramShield(&rep)));
+    PRISMX_ASSERT(rep.bootStartVgkAndRandgridActive && rep.ring1FaultIsolationGuardActive);
+    PRISMX_ASSERT(rep.simulatedDriverFaultsHealedZeroBsod == 1u);
+    PRISMX_ASSERT((rep.codeIntegrityOptionsReported & PRISM_CODEINTEGRITY_OPTION_HVCI_KMCI_ENABLED) != 0);
+    PRISMX_ASSERT(rep.tpm20AndPlutonPcr0To7QuoteValid && rep.secureBootEnabled);
+    PRISMX_ASSERT(rep.iommuVtdAmdViDmaRemappingActive);
+    PRISMX_ASSERT(rep.protectedReBarVramApertureBytes == 16ULL * 1024ULL * 1024ULL * 1024ULL);
+    PRISMX_ASSERT(rep.blockedFpgaPcieDmaLeechReads == 4u);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_GamingDRM_Denuvo_VMProtect_And_SaltedHwidVault() {
+    PRISMX_TEST("Test_PrismX_GamingDRM_Denuvo_VMProtect_And_SaltedHwidVault")
+
+    using namespace prismx::AntiCheat;
+
+    GamingDrmAndHwidVaultReport rep{};
+    PRISMX_ASSERT(SUCCEEDED(PrismGamingDrmAndHwidVault::VerifyGamingDrmAndHwidPrivacyVault(&rep)));
+    PRISMX_ASSERT(rep.denuvoVmProtectExceptionDispatcherActive && rep.singleStepExceptionsDispatched == 64u);
+    PRISMX_ASSERT(rep.hardwareDebugRegistersDr0ToDr7Consistent && rep.invariantRdtscAndCpuidHypervisorLeafClean);
+    PRISMX_ASSERT(rep.perGameSaltedHwidPrivacyVaultActive && rep.crossGameTrackingPrevented);
+    PRISMX_ASSERT(rep.gameASaltedGpuUuid != 0 && rep.gameBSaltedGpuUuid != 0 && rep.gameASaltedGpuUuid != rep.gameBSaltedGpuUuid);
+    PRISMX_ASSERT(rep.totalVerifiedPrismXSuites == 30u);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -3063,9 +3116,12 @@ int main() {
     if (Test_PrismX_HLSL_FXC_DXBC_Compiler_And_D3D12ShaderReflection() != 0) return 1;
     if (Test_PrismX_DXIL_SM69_Container_And_Wave32_SIMD_VM() != 0) return 1;
     if (Test_PrismX_SPIRV16_DXIL_CrossTranslator_And_RootSignatureRemap() != 0) return 1;
+    if (Test_PrismX_Ring0_AntiCheat_EAC_BattlEye_And_SwapChainGuard() != 0) return 1;
+    if (Test_PrismX_Vanguard_Ricochet_HVCI_TPM20_And_IOMMU_VramShield() != 0) return 1;
+    if (Test_PrismX_GamingDRM_Denuvo_VMProtect_And_SaltedHwidVault() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (27/27)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (30/30)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
