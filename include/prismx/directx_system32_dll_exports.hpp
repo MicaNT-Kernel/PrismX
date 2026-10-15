@@ -36,6 +36,7 @@
 #include "mfplat_mfreadwrite_com_abi.hpp"
 #include "dxcore_com_abi.hpp"
 #include "vulkan1_opengl32_system32_abi.hpp"
+#include "d3d10_dsound_ddraw_mf_com_abi.hpp"
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -541,9 +542,69 @@ inline HRESULT Export_DXCoreCreateAdapterFactory(const IID& riid, void** ppvFact
     return DXCoreComAbi::DXCoreCreateAdapterFactory(riid, ppvFactory);
 }
 
+// --- d3d10_1.dll / d3d10.dll exports ---
+inline HRESULT Export_D3D10CreateDevice1(IDXGIAdapter* pAdapter, uint32_t DriverType,
+                                         void* Software, uint32_t Flags,
+                                         uint32_t HardwareLevel, uint32_t SDKVersion,
+                                         D3D10DSoundDDrawMFCom::ID3D10Device1** ppDevice) {
+    return D3D10DSoundDDrawMFCom::D3D10CreateDevice1(pAdapter, DriverType, Software, Flags, HardwareLevel, SDKVersion, ppDevice);
+}
+
+inline HRESULT Export_D3D10CreateDeviceAndSwapChain1(IDXGIAdapter* pAdapter, uint32_t DriverType,
+                                                     void* Software, uint32_t Flags,
+                                                     uint32_t HardwareLevel, uint32_t SDKVersion,
+                                                     const void* pSwapChainDesc,
+                                                     IDXGISwapChain** ppSwapChain,
+                                                     D3D10DSoundDDrawMFCom::ID3D10Device1** ppDevice) {
+    return D3D10DSoundDDrawMFCom::D3D10CreateDeviceAndSwapChain1(
+        pAdapter, DriverType, Software, Flags, HardwareLevel, SDKVersion, pSwapChainDesc, ppSwapChain, ppDevice);
+}
+
+inline HRESULT Export_D3D10CreateDevice(IDXGIAdapter* pAdapter, uint32_t DriverType,
+                                        void* Software, uint32_t Flags,
+                                        uint32_t SDKVersion,
+                                        D3D10DSoundDDrawMFCom::ID3D10Device** ppDevice) {
+    return D3D10DSoundDDrawMFCom::D3D10CreateDevice(pAdapter, DriverType, Software, Flags, SDKVersion, ppDevice);
+}
+
+// --- dsound.dll exports ---
+inline HRESULT Export_DirectSoundCreate8(const IID* lpcGuidDevice,
+                                         D3D10DSoundDDrawMFCom::IDirectSound8** ppDS8,
+                                         IUnknown* pUnkOuter) {
+    return D3D10DSoundDDrawMFCom::DirectSoundCreate8(lpcGuidDevice, ppDS8, pUnkOuter);
+}
+
+inline HRESULT Export_DirectSoundCreate(const IID* lpcGuidDevice,
+                                        D3D10DSoundDDrawMFCom::IDirectSound8** ppDS,
+                                        IUnknown* pUnkOuter) {
+    return D3D10DSoundDDrawMFCom::DirectSoundCreate(lpcGuidDevice, ppDS, pUnkOuter);
+}
+
+// --- ddraw.dll exports ---
+inline HRESULT Export_DirectDrawCreateEx(const IID* lpGuid, void** lplpDD,
+                                         const IID& iid, IUnknown* pUnkOuter) {
+    return D3D10DSoundDDrawMFCom::DirectDrawCreateEx(lpGuid, lplpDD, iid, pUnkOuter);
+}
+
+inline HRESULT Export_DirectDrawCreate(const IID* lpGUID,
+                                       D3D10DSoundDDrawMFCom::IDirectDraw7** lplpDD,
+                                       IUnknown* pUnkOuter) {
+    return D3D10DSoundDDrawMFCom::DirectDrawCreate(lpGUID, lplpDD, pUnkOuter);
+}
+
+// --- mf.dll exports ---
+inline HRESULT Export_MFCreateMediaSession(MediaFoundationCom::IMFAttributes* pConfiguration,
+                                           D3D10DSoundDDrawMFCom::IMFMediaSession** ppMediaSession) {
+    return D3D10DSoundDDrawMFCom::MFCreateMediaSession(pConfiguration, ppMediaSession);
+}
+
+inline HRESULT Export_MFCreateTopology(D3D10DSoundDDrawMFCom::IMFTopology** ppTopo) {
+    return D3D10DSoundDDrawMFCom::MFCreateTopology(ppTopo);
+}
+
 // ----------------------------------------------------------------------------
 // 4. PrismDirectXSystem32Loader — Dynamic Export Table & LoadLibrary/GetProcAddress
-//    Router for Windows Games (16 System32 DirectX/Media DLLs + Agility SDK D3D12Core.dll)
+//    Router for Windows Games (20 System32 DirectX/Media DLLs + Agility SDK D3D12Core.dll)
 // ----------------------------------------------------------------------------
 enum class System32ModuleHandle : uintptr_t {
     Invalid         = 0,
@@ -551,16 +612,20 @@ enum class System32ModuleHandle : uintptr_t {
     D3D12CORE_DLL   = 0x00007FF8D3120618ULL,
     DXGI_DLL        = 0x00007FF8D8610000ULL,
     D3D11_DLL       = 0x00007FF8D3110000ULL,
+    D3D10_1_DLL     = 0x00007FF8D3100100ULL,
     D3D9_DLL        = 0x00007FF8D3090000ULL,
     D3DCOMPILER_47  = 0x00007FF8D3470000ULL,
     XINPUT1_4_DLL   = 0x00007FF881140000ULL,
     XAUDIO2_9_DLL   = 0x00007FF88A290000ULL,
+    DSOUND_DLL      = 0x00007FF8D5080000ULL,
     DINPUT8_DLL     = 0x00007FF8D1080000ULL,
+    DDRAW_DLL       = 0x00007FF8DD070000ULL,
     D2D1_DLL        = 0x00007FF8D2D10000ULL,
     DWRITE_DLL      = 0x00007FF8D7710000ULL,
     DCOMP_DLL       = 0x00007FF8DC000000ULL,
     MFPLAT_DLL      = 0x00007FF8DF010000ULL,
     MFREADWRITE_DLL = 0x00007FF8DF020000ULL,
+    MF_DLL          = 0x00007FF8DF030000ULL,
     DXCORE_DLL      = 0x00007FF8D8C00000ULL,
     VULKAN_1_DLL    = 0x00007FF8564B0000ULL,
     OPENGL32_DLL    = 0x00007FF8474C0000ULL
@@ -586,13 +651,17 @@ public:
         if (EndsWithIgnoreCase(path, "d3d12.dll") || EndsWithIgnoreCase(path, "d3d12")) return System32ModuleHandle::D3D12_DLL;
         if (EndsWithIgnoreCase(path, "dxgi.dll") || EndsWithIgnoreCase(path, "dxgi")) return System32ModuleHandle::DXGI_DLL;
         if (EndsWithIgnoreCase(path, "d3d11.dll") || EndsWithIgnoreCase(path, "d3d11")) return System32ModuleHandle::D3D11_DLL;
+        if (EndsWithIgnoreCase(path, "d3d10_1.dll") || EndsWithIgnoreCase(path, "d3d10.dll") || EndsWithIgnoreCase(path, "d3d10_1")) return System32ModuleHandle::D3D10_1_DLL;
         if (EndsWithIgnoreCase(path, "d3d9.dll") || EndsWithIgnoreCase(path, "d3d9")) return System32ModuleHandle::D3D9_DLL;
         if (EndsWithIgnoreCase(path, "d3dcompiler_47.dll") || EndsWithIgnoreCase(path, "d3dcompiler_43.dll")) return System32ModuleHandle::D3DCOMPILER_47;
         if (EndsWithIgnoreCase(path, "xinput1_4.dll") || EndsWithIgnoreCase(path, "xinput1_3.dll") || EndsWithIgnoreCase(path, "xinput9_1_0.dll")) return System32ModuleHandle::XINPUT1_4_DLL;
         if (EndsWithIgnoreCase(path, "xaudio2_9.dll") || EndsWithIgnoreCase(path, "xaudio2_8.dll") || EndsWithIgnoreCase(path, "xaudio2_7.dll")) return System32ModuleHandle::XAUDIO2_9_DLL;
+        if (EndsWithIgnoreCase(path, "dsound.dll") || EndsWithIgnoreCase(path, "dsound")) return System32ModuleHandle::DSOUND_DLL;
         if (EndsWithIgnoreCase(path, "dinput8.dll") || EndsWithIgnoreCase(path, "dinput8")) return System32ModuleHandle::DINPUT8_DLL;
+        if (EndsWithIgnoreCase(path, "ddraw.dll") || EndsWithIgnoreCase(path, "ddraw")) return System32ModuleHandle::DDRAW_DLL;
         if (EndsWithIgnoreCase(path, "mfplat.dll") || EndsWithIgnoreCase(path, "mfplat")) return System32ModuleHandle::MFPLAT_DLL;
         if (EndsWithIgnoreCase(path, "mfreadwrite.dll") || EndsWithIgnoreCase(path, "mfreadwrite")) return System32ModuleHandle::MFREADWRITE_DLL;
+        if (EndsWithIgnoreCase(path, "mf.dll") || EndsWithIgnoreCase(path, "mf")) return System32ModuleHandle::MF_DLL;
         if (EndsWithIgnoreCase(path, "d2d1.dll") || EndsWithIgnoreCase(path, "d2d1")) return System32ModuleHandle::D2D1_DLL;
         if (EndsWithIgnoreCase(path, "dwrite.dll") || EndsWithIgnoreCase(path, "dwrite")) return System32ModuleHandle::DWRITE_DLL;
         if (EndsWithIgnoreCase(path, "dcomp.dll") || EndsWithIgnoreCase(path, "dcomp")) return System32ModuleHandle::DCOMP_DLL;
@@ -626,6 +695,13 @@ public:
                 if (procName == "D3D11CreateDeviceAndSwapChain") return reinterpret_cast<void*>(&Export_D3D11CreateDeviceAndSwapChain);
                 break;
 
+            case System32ModuleHandle::D3D10_1_DLL:
+                if (procName == "D3D10CreateDevice1") return reinterpret_cast<void*>(&Export_D3D10CreateDevice1);
+                if (procName == "D3D10CreateDeviceAndSwapChain1") return reinterpret_cast<void*>(&Export_D3D10CreateDeviceAndSwapChain1);
+                if (procName == "D3D10CreateDevice") return reinterpret_cast<void*>(&Export_D3D10CreateDevice);
+                if (procName == "D3D10CreateBlob") return reinterpret_cast<void*>(&Export_D3DCreateBlob);
+                break;
+
             case System32ModuleHandle::D3D9_DLL:
                 if (procName == "Direct3DCreate9") return reinterpret_cast<void*>(&Export_Direct3DCreate9);
                 if (procName == "Direct3DCreate9Ex") return reinterpret_cast<void*>(&Export_Direct3DCreate9Ex);
@@ -653,8 +729,18 @@ public:
                 if (procName == "CreateAudioReverb") return reinterpret_cast<void*>(&Export_CreateAudioReverb);
                 break;
 
+            case System32ModuleHandle::DSOUND_DLL:
+                if (procName == "DirectSoundCreate8") return reinterpret_cast<void*>(&Export_DirectSoundCreate8);
+                if (procName == "DirectSoundCreate") return reinterpret_cast<void*>(&Export_DirectSoundCreate);
+                break;
+
             case System32ModuleHandle::DINPUT8_DLL:
                 if (procName == "DirectInput8Create") return reinterpret_cast<void*>(&Export_DirectInput8Create);
+                break;
+
+            case System32ModuleHandle::DDRAW_DLL:
+                if (procName == "DirectDrawCreateEx") return reinterpret_cast<void*>(&Export_DirectDrawCreateEx);
+                if (procName == "DirectDrawCreate") return reinterpret_cast<void*>(&Export_DirectDrawCreate);
                 break;
 
             case System32ModuleHandle::D2D1_DLL:
@@ -691,6 +777,11 @@ public:
                 if (procName == "MFCreateSourceReaderFromURL") return reinterpret_cast<void*>(&Export_MFCreateSourceReaderFromURL);
                 if (procName == "MFCreateSourceReaderFromByteStream") return reinterpret_cast<void*>(&Export_MFCreateSourceReaderFromByteStream);
                 if (procName == "MFCreateSinkWriterFromURL") return reinterpret_cast<void*>(&Export_MFCreateSinkWriterFromURL);
+                break;
+
+            case System32ModuleHandle::MF_DLL:
+                if (procName == "MFCreateMediaSession") return reinterpret_cast<void*>(&Export_MFCreateMediaSession);
+                if (procName == "MFCreateTopology") return reinterpret_cast<void*>(&Export_MFCreateTopology);
                 break;
 
             case System32ModuleHandle::DXCORE_DLL:

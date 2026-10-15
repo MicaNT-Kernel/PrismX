@@ -52,5 +52,6 @@
 #include "prismx/mfplat_mfreadwrite_com_abi.hpp"
 #include "prismx/dxcore_com_abi.hpp"
 #include "prismx/vulkan1_opengl32_system32_abi.hpp"
+#include "prismx/d3d10_dsound_ddraw_mf_com_abi.hpp"
 #include "prismx/directx_system32_dll_exports.hpp"
 #include "prismx/win32_hwnd_event_dxgi_interop.hpp"

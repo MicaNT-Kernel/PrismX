@@ -3995,6 +3995,93 @@ int Test_PrismX_Official_Win32_HWND_Event_And_DWM_IndependentFlip_Interop() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D10_1_DSound8_DDraw7_MF_And_20_System32_DLL_Seal() {
+    PRISMX_TEST("Suite 41: Official D3D10.1, DirectSound8, DirectDraw7, MF Session & 20 System32 DLL Seal")
+
+    using namespace prismx::system32;
+    using namespace prismx::D3D10DSoundDDrawMFCom;
+
+    // 1. Verify d3d10_1.dll router & ID3D10Device1 <-> IDXGIDevice1 QueryInterface
+    auto hD3D10 = PrismDirectXSystem32Loader::LoadDirectXLibrary("C:\\Windows\\System32\\d3d10_1.dll");
+    PRISMX_ASSERT(hD3D10 == System32ModuleHandle::D3D10_1_DLL);
+    auto fnCreate10_1 = reinterpret_cast<decltype(&Export_D3D10CreateDevice1)>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hD3D10, "D3D10CreateDevice1"));
+    PRISMX_ASSERT(fnCreate10_1 != nullptr);
+
+    ID3D10Device1* dev10 = nullptr;
+    PRISMX_ASSERT(fnCreate10_1(nullptr, D3D10_DRIVER_TYPE_HARDWARE, nullptr, 0, D3D10_FEATURE_LEVEL_10_1, D3D10_1_SDK_VERSION, &dev10) == prismx::S_OK);
+    PRISMX_ASSERT(dev10 != nullptr);
+    PRISMX_ASSERT(dev10->GetFeatureLevel() == D3D10_FEATURE_LEVEL_10_1);
+    dev10->Draw(36, 0);
+    dev10->Flush();
+
+    prismx::Dxgi16::IDXGIDevice4* dxgiDev = nullptr;
+    PRISMX_ASSERT(dev10->QueryInterface(prismx::Dxgi16::OFFICIAL_IID_IDXGIDevice1, reinterpret_cast<void**>(&dxgiDev)) == prismx::S_OK);
+    PRISMX_ASSERT(dxgiDev != nullptr);
+
+    // 2. Verify dsound.dll router & IDirectSound8 / IDirectSoundBuffer8 ring lock/play
+    auto hDSound = PrismDirectXSystem32Loader::LoadDirectXLibrary("dsound.dll");
+    PRISMX_ASSERT(hDSound == System32ModuleHandle::DSOUND_DLL);
+    auto fnDSCreate8 = reinterpret_cast<decltype(&Export_DirectSoundCreate8)>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hDSound, "DirectSoundCreate8"));
+    PRISMX_ASSERT(fnDSCreate8 != nullptr);
+
+    IDirectSound8* ds8 = nullptr;
+    PRISMX_ASSERT(fnDSCreate8(nullptr, &ds8, nullptr) == prismx::S_OK && ds8 != nullptr);
+    PRISMX_ASSERT(ds8->SetCooperativeLevel(reinterpret_cast<void*>(0x000A0100ULL), DSSCL_PRIORITY) == prismx::S_OK);
+
+    DSBUFFERDESC dsDesc{};
+    dsDesc.dwSize = sizeof(DSBUFFERDESC);
+    dsDesc.dwBufferBytes = 16384;
+    IDirectSoundBuffer8* dsBuf = nullptr;
+    PRISMX_ASSERT(ds8->CreateSoundBuffer(&dsDesc, &dsBuf, nullptr) == prismx::S_OK && dsBuf != nullptr);
+
+    void* ptr1 = nullptr;
+    uint32_t bytes1 = 0;
+    PRISMX_ASSERT(dsBuf->Lock(0, 4096, &ptr1, &bytes1, nullptr, nullptr, 0) == prismx::S_OK);
+    PRISMX_ASSERT(ptr1 != nullptr && bytes1 == 4096);
+    std::memset(ptr1, 0, bytes1);
+    PRISMX_ASSERT(dsBuf->Unlock(ptr1, bytes1, nullptr, 0) == prismx::S_OK);
+    PRISMX_ASSERT(dsBuf->Play(0, 0, DSBPLAY_LOOPING) == prismx::S_OK);
+    uint32_t dsStatus = 0;
+    PRISMX_ASSERT(dsBuf->GetStatus(&dsStatus) == prismx::S_OK);
+    PRISMX_ASSERT((dsStatus & (DSBSTATUS_PLAYING | DSBSTATUS_LOOPING)) == (DSBSTATUS_PLAYING | DSBSTATUS_LOOPING));
+
+    // 3. Verify ddraw.dll router & IDirectDraw7 / IDirectDrawSurface7
+    auto hDDraw = PrismDirectXSystem32Loader::LoadDirectXLibrary("ddraw.dll");
+    PRISMX_ASSERT(hDDraw == System32ModuleHandle::DDRAW_DLL);
+    auto fnDDCreateEx = reinterpret_cast<decltype(&Export_DirectDrawCreateEx)>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hDDraw, "DirectDrawCreateEx"));
+    PRISMX_ASSERT(fnDDCreateEx != nullptr);
+
+    IDirectDraw7* dd7 = nullptr;
+    PRISMX_ASSERT(fnDDCreateEx(nullptr, reinterpret_cast<void**>(&dd7), OFFICIAL_IID_IDirectDraw7, nullptr) == prismx::S_OK && dd7 != nullptr);
+    PRISMX_ASSERT(dd7->SetDisplayMode(1920, 1080, 32, 540, 0) == prismx::S_OK);
+    IDirectDrawSurface7* ddSurf = nullptr;
+    PRISMX_ASSERT(dd7->CreateSurface(nullptr, &ddSurf, nullptr) == prismx::S_OK && ddSurf != nullptr);
+    PRISMX_ASSERT(ddSurf->Flip(nullptr, 0) == prismx::S_OK);
+
+    // 4. Verify mf.dll router & IMFMediaSession / IMFTopology
+    auto hMF = PrismDirectXSystem32Loader::LoadDirectXLibrary("mf.dll");
+    PRISMX_ASSERT(hMF == System32ModuleHandle::MF_DLL);
+    auto fnMFSession = reinterpret_cast<decltype(&Export_MFCreateMediaSession)>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hMF, "MFCreateMediaSession"));
+    auto fnMFTopo = reinterpret_cast<decltype(&Export_MFCreateTopology)>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hMF, "MFCreateTopology"));
+    PRISMX_ASSERT(fnMFSession != nullptr && fnMFTopo != nullptr);
+
+    IMFMediaSession* session = nullptr;
+    IMFTopology* topo = nullptr;
+    PRISMX_ASSERT(fnMFSession(nullptr, &session) == prismx::S_OK && session != nullptr);
+    PRISMX_ASSERT(fnMFTopo(&topo) == prismx::S_OK && topo != nullptr);
+    PRISMX_ASSERT(topo->AddNode(session) == prismx::S_OK);
+    PRISMX_ASSERT(session->SetTopology(0, topo) == prismx::S_OK);
+    PRISMX_ASSERT(session->Start(nullptr, nullptr) == prismx::S_OK);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4040,9 +4127,10 @@ int main() {
     if (Test_PrismX_Official_DXCore_AdapterFactory1_COM_VTable_And_ML_Compute_DLL() != 0) return 1;
     if (Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() != 0) return 1;
     if (Test_PrismX_Official_Win32_HWND_Event_And_DWM_IndependentFlip_Interop() != 0) return 1;
+    if (Test_PrismX_Official_D3D10_1_DSound8_DDraw7_MF_And_20_System32_DLL_Seal() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (40/40)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (41/41)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

@@ -122,20 +122,36 @@ set_target_properties(vulkan_1 PROPERTIES OUTPUT_NAME "vulkan-1")
 add_library(opengl32 SHARED src/opengl32_dll.cpp)
 target_link_libraries(opengl32 PRIVATE prismx)
 
+add_library(d3d10_1 SHARED src/d3d10_1_dll.cpp)
+target_link_libraries(d3d10_1 PRIVATE prismx)
+
+add_library(dsound SHARED src/dsound_dll.cpp)
+target_link_libraries(dsound PRIVATE prismx)
+
+add_library(ddraw SHARED src/ddraw_dll.cpp)
+target_link_libraries(ddraw PRIVATE prismx)
+
+add_library(mf SHARED src/mf_dll.cpp)
+target_link_libraries(mf PRIVATE prismx)
+
 set_target_properties(
     dxgi
     d3d12
     d3d11
+    d3d10_1
     d3d9
     d3dcompiler_47
     xinput1_4
     xaudio2_9
+    dsound
     dinput8
+    ddraw
     d2d1
     dwrite
     dcomp
     mfplat
     mfreadwrite
+    mf
     dxcore
     vulkan_1
     opengl32
