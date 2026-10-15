@@ -2722,6 +2722,40 @@ int Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution() {
     return 0;
 }
 
+int Test_PrismX_EnhancedBarriers_VulkanOn12_VideoAV1_And_DRED_ZeroTDR() {
+    PRISMX_TEST("Test_PrismX_EnhancedBarriers_VulkanOn12_VideoAV1_And_DRED_ZeroTDR")
+
+    // 1. D3D12 Enhanced Barriers (D3D12EnhancedBarriers.md)
+    D3D12_TEXTURE_BARRIER texBarrier{};
+    texBarrier.SyncBefore   = D3D12_BARRIER_SYNC_RENDER_TARGET;
+    texBarrier.SyncAfter    = D3D12_BARRIER_SYNC_PIXEL_SHADING;
+    texBarrier.AccessBefore = D3D12_BARRIER_ACCESS_RENDER_TARGET;
+    texBarrier.AccessAfter  = D3D12_BARRIER_ACCESS_SHADER_RESOURCE;
+    texBarrier.LayoutBefore = D3D12_BARRIER_LAYOUT_RENDER_TARGET;
+    texBarrier.LayoutAfter  = D3D12_BARRIER_LAYOUT_SHADER_RESOURCE;
+    D3D12_BARRIER_GROUP grp{};
+    grp.Type             = D3D12_BARRIER_TYPE_TEXTURE;
+    grp.NumBarriers      = 1;
+    grp.pTextureBarriers = &texBarrier;
+    PRISMX_ASSERT(grp.NumBarriers == 1 && grp.pTextureBarriers[0].LayoutAfter == D3D12_BARRIER_LAYOUT_SHADER_RESOURCE);
+
+    // 2. VulkanOn12 Conformance & D3D12 Video AV1/HEVC Hardware Encode
+    VulkanOn12AndVideoEncodeTelemetry vkVid{};
+    PRISMX_ASSERT(SUCCEEDED(PrismVulkanOn12AndVideoEngine::VerifyVulkanOn12AndEncodeAv1Frame(3840, 2160, &vkVid)));
+    PRISMX_ASSERT(vkVid.relaxedFormatListCastingEnabled && vkVid.unrestrictedRowPitchTextureCopyEnabled);
+    PRISMX_ASSERT(vkVid.av1HardwareEncoderActive && vkVid.hevc444HardwareEncoderActive);
+    PRISMX_ASSERT(vkVid.encoded4K60Av1BitstreamBytes > 0 && vkVid.motionEstimationSearchBlocks == 32400);
+
+    // 3. DRED 1.2 Auto-Breadcrumbs & Zero-TDR Sub-Millisecond GPU Fault Recovery
+    DredZeroTdrSelfHealReport dred{};
+    PRISMX_ASSERT(SUCCEEDED(PrismDredZeroTdrSelfHealingEngine::SimulateFaultAndVerifySelfHeal(0x0000000240800000ULL, &dred)));
+    PRISMX_ASSERT(dred.AutoBreadcrumbsEnabled && dred.PageFaultVaTrackingEnabled);
+    PRISMX_ASSERT(dred.DummyGuardPageRemapped && dred.SubMillisecondEngineResetUs < 1000 && dred.ZeroTdrDesktopPreserved);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2746,9 +2780,10 @@ int main() {
     if (Test_PrismEffects_PostProcessing_And_EffectGraph() != 0) return 1;
     if (Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() != 0) return 1;
     if (Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution() != 0) return 1;
+    if (Test_PrismX_EnhancedBarriers_VulkanOn12_VideoAV1_And_DRED_ZeroTDR() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (19/19)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (20/20)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
