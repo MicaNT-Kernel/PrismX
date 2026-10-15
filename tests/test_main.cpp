@@ -2756,6 +2756,32 @@ int Test_PrismX_EnhancedBarriers_VulkanOn12_VideoAV1_And_DRED_ZeroTDR() {
     return 0;
 }
 
+int Test_PrismX_Live_3D_Scene_Renderer_And_GOP_FrameGraph() {
+    PRISMX_TEST("Test_PrismX_Live_3D_Scene_Renderer_And_GOP_FrameGraph")
+
+    constexpr uint32_t W = 320;
+    constexpr uint32_t H = 200;
+    std::vector<uint32_t> framebuffer(W * H, 0);
+    PrismXFrameGraphPassMetrics metrics{};
+
+    HRESULT hr = PrismXLive3DSceneEngine::RenderCrystalPrismSceneToLinearFramebuffer(
+        framebuffer.data(), W, H, 0.52f, &metrics
+    );
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(metrics.GDeflateAssetStreamCompleted && metrics.GDeflateBandwidthGBps >= 14.0);
+    PRISMX_ASSERT(metrics.Sm69WorkGraphMeshCullCompleted && metrics.MeshShaderAmplifiedTriangles == 16);
+    PRISMX_ASSERT(metrics.Dxr11InlineRayQueryCompleted && metrics.ReflectionRaysHit == 8);
+    PRISMX_ASSERT(metrics.DirectMlSuperResCompleted && metrics.UpscaledOutputWidth == W && metrics.UpscaledOutputHeight == H);
+    PRISMX_ASSERT(metrics.EnhancedBarrierDirectFlipScanout && metrics.TargetRefreshHz == 540);
+    PRISMX_ASSERT(metrics.LitCrystalPixelsRendered > 500);
+    PRISMX_ASSERT(metrics.ReflectionPixelsRendered > 100);
+    PRISMX_ASSERT(metrics.HorizonGridPixelsRendered > 200);
+    PRISMX_ASSERT(metrics.CenterCrystalPixelBGRA != 0);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2781,9 +2807,10 @@ int main() {
     if (Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() != 0) return 1;
     if (Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution() != 0) return 1;
     if (Test_PrismX_EnhancedBarriers_VulkanOn12_VideoAV1_And_DRED_ZeroTDR() != 0) return 1;
+    if (Test_PrismX_Live_3D_Scene_Renderer_And_GOP_FrameGraph() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (20/20)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (21/21)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

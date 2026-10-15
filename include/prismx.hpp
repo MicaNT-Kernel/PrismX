@@ -34,3 +34,5 @@
 #include "prismx/directx_ecosystem_bridge.hpp"
 #include "prismx/dxc_gdeflate_directml_bridge.hpp"
 #include "prismx/agility_dred_vulkanon12_video.hpp"
+#include "prismx/live_3d_scene_renderer.hpp"
+
