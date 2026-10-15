@@ -49,7 +49,11 @@
 #include "prismx/d3d9_com_vtable_abi.hpp"
 #include "prismx/xaudio2_dinput8_com_abi.hpp"
 #include "prismx/d2d1_dwrite_dcomp_com_abi.hpp"
+#include "prismx/mfplat_mfreadwrite_com_abi.hpp"
+#include "prismx/dxcore_com_abi.hpp"
+#include "prismx/vulkan1_opengl32_system32_abi.hpp"
 #include "prismx/directx_system32_dll_exports.hpp"
+
 
 
 

@@ -33,6 +33,9 @@
 #include "d3d9_com_vtable_abi.hpp"
 #include "xaudio2_dinput8_com_abi.hpp"
 #include "d2d1_dwrite_dcomp_com_abi.hpp"
+#include "mfplat_mfreadwrite_com_abi.hpp"
+#include "dxcore_com_abi.hpp"
+#include "vulkan1_opengl32_system32_abi.hpp"
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -485,9 +488,62 @@ inline HRESULT Export_DCompositionCreateSurfaceHandle(uint32_t desiredAccess,
     return D2DWriteCompCom::DCompositionCreateSurfaceHandle(desiredAccess, securityAttributes, surfaceHandle);
 }
 
+// --- mfplat.dll & mfreadwrite.dll exports ---
+inline HRESULT Export_MFStartup(uint32_t Version, uint32_t dwFlags) {
+    return MediaFoundationCom::MFStartup(Version, dwFlags);
+}
+
+inline HRESULT Export_MFShutdown() {
+    return MediaFoundationCom::MFShutdown();
+}
+
+inline HRESULT Export_MFCreateAttributes(MediaFoundationCom::IMFAttributes** ppMFAttributes, uint32_t cInitialSize) {
+    return MediaFoundationCom::MFCreateAttributes(ppMFAttributes, cInitialSize);
+}
+
+inline HRESULT Export_MFCreateMediaType(MediaFoundationCom::IMFMediaType** ppMFType) {
+    return MediaFoundationCom::MFCreateMediaType(ppMFType);
+}
+
+inline HRESULT Export_MFCreateMemoryBuffer(uint32_t cbMaxLength, MediaFoundationCom::IMFMediaBuffer** ppBuffer) {
+    return MediaFoundationCom::MFCreateMemoryBuffer(cbMaxLength, ppBuffer);
+}
+
+inline HRESULT Export_MFCreateSample(MediaFoundationCom::IMFSample** ppIMFSample) {
+    return MediaFoundationCom::MFCreateSample(ppIMFSample);
+}
+
+inline HRESULT Export_MFCreateDXGIDeviceManager(uint32_t* resetToken, MediaFoundationCom::IMFDXGIDeviceManager** ppDeviceManager) {
+    return MediaFoundationCom::MFCreateDXGIDeviceManager(resetToken, ppDeviceManager);
+}
+
+inline HRESULT Export_MFCreateSourceReaderFromURL(const wchar_t* pwszURL,
+                                                  MediaFoundationCom::IMFAttributes* pAttributes,
+                                                  MediaFoundationCom::IMFSourceReader** ppSourceReader) {
+    return MediaFoundationCom::MFCreateSourceReaderFromURL(pwszURL, pAttributes, ppSourceReader);
+}
+
+inline HRESULT Export_MFCreateSourceReaderFromByteStream(IUnknown* pByteStream,
+                                                         MediaFoundationCom::IMFAttributes* pAttributes,
+                                                         MediaFoundationCom::IMFSourceReader** ppSourceReader) {
+    return MediaFoundationCom::MFCreateSourceReaderFromByteStream(pByteStream, pAttributes, ppSourceReader);
+}
+
+inline HRESULT Export_MFCreateSinkWriterFromURL(const wchar_t* pwszOutputURL,
+                                                IUnknown* pByteStream,
+                                                MediaFoundationCom::IMFAttributes* pAttributes,
+                                                MediaFoundationCom::IMFSinkWriter** ppSinkWriter) {
+    return MediaFoundationCom::MFCreateSinkWriterFromURL(pwszOutputURL, pByteStream, pAttributes, ppSinkWriter);
+}
+
+// --- dxcore.dll exports ---
+inline HRESULT Export_DXCoreCreateAdapterFactory(const IID& riid, void** ppvFactory) {
+    return DXCoreComAbi::DXCoreCreateAdapterFactory(riid, ppvFactory);
+}
+
 // ----------------------------------------------------------------------------
 // 4. PrismDirectXSystem32Loader — Dynamic Export Table & LoadLibrary/GetProcAddress
-//    Router for Windows Games (11 System32 DirectX DLLs + Agility SDK D3D12Core.dll)
+//    Router for Windows Games (16 System32 DirectX/Media DLLs + Agility SDK D3D12Core.dll)
 // ----------------------------------------------------------------------------
 enum class System32ModuleHandle : uintptr_t {
     Invalid         = 0,
@@ -502,7 +558,12 @@ enum class System32ModuleHandle : uintptr_t {
     DINPUT8_DLL     = 0x00007FF8D1080000ULL,
     D2D1_DLL        = 0x00007FF8D2D10000ULL,
     DWRITE_DLL      = 0x00007FF8D7710000ULL,
-    DCOMP_DLL       = 0x00007FF8DC000000ULL
+    DCOMP_DLL       = 0x00007FF8DC000000ULL,
+    MFPLAT_DLL      = 0x00007FF8DF010000ULL,
+    MFREADWRITE_DLL = 0x00007FF8DF020000ULL,
+    DXCORE_DLL      = 0x00007FF8D8C00000ULL,
+    VULKAN_1_DLL    = 0x00007FF8564B0000ULL,
+    OPENGL32_DLL    = 0x00007FF8474C0000ULL
 };
 
 class PrismDirectXSystem32Loader {
@@ -530,9 +591,14 @@ public:
         if (EndsWithIgnoreCase(path, "xinput1_4.dll") || EndsWithIgnoreCase(path, "xinput1_3.dll") || EndsWithIgnoreCase(path, "xinput9_1_0.dll")) return System32ModuleHandle::XINPUT1_4_DLL;
         if (EndsWithIgnoreCase(path, "xaudio2_9.dll") || EndsWithIgnoreCase(path, "xaudio2_8.dll") || EndsWithIgnoreCase(path, "xaudio2_7.dll")) return System32ModuleHandle::XAUDIO2_9_DLL;
         if (EndsWithIgnoreCase(path, "dinput8.dll") || EndsWithIgnoreCase(path, "dinput8")) return System32ModuleHandle::DINPUT8_DLL;
+        if (EndsWithIgnoreCase(path, "mfplat.dll") || EndsWithIgnoreCase(path, "mfplat")) return System32ModuleHandle::MFPLAT_DLL;
+        if (EndsWithIgnoreCase(path, "mfreadwrite.dll") || EndsWithIgnoreCase(path, "mfreadwrite")) return System32ModuleHandle::MFREADWRITE_DLL;
         if (EndsWithIgnoreCase(path, "d2d1.dll") || EndsWithIgnoreCase(path, "d2d1")) return System32ModuleHandle::D2D1_DLL;
         if (EndsWithIgnoreCase(path, "dwrite.dll") || EndsWithIgnoreCase(path, "dwrite")) return System32ModuleHandle::DWRITE_DLL;
         if (EndsWithIgnoreCase(path, "dcomp.dll") || EndsWithIgnoreCase(path, "dcomp")) return System32ModuleHandle::DCOMP_DLL;
+        if (EndsWithIgnoreCase(path, "dxcore.dll") || EndsWithIgnoreCase(path, "dxcore")) return System32ModuleHandle::DXCORE_DLL;
+        if (EndsWithIgnoreCase(path, "vulkan-1.dll") || EndsWithIgnoreCase(path, "vulkan-1")) return System32ModuleHandle::VULKAN_1_DLL;
+        if (EndsWithIgnoreCase(path, "opengl32.dll") || EndsWithIgnoreCase(path, "opengl32")) return System32ModuleHandle::OPENGL32_DLL;
         return System32ModuleHandle::Invalid;
     }
 
@@ -609,6 +675,46 @@ public:
                 if (procName == "DCompositionCreateDevice2") return reinterpret_cast<void*>(&Export_DCompositionCreateDevice2);
                 if (procName == "DCompositionCreateDevice3") return reinterpret_cast<void*>(&Export_DCompositionCreateDevice3);
                 if (procName == "DCompositionCreateSurfaceHandle") return reinterpret_cast<void*>(&Export_DCompositionCreateSurfaceHandle);
+                break;
+
+            case System32ModuleHandle::MFPLAT_DLL:
+                if (procName == "MFStartup") return reinterpret_cast<void*>(&Export_MFStartup);
+                if (procName == "MFShutdown") return reinterpret_cast<void*>(&Export_MFShutdown);
+                if (procName == "MFCreateAttributes") return reinterpret_cast<void*>(&Export_MFCreateAttributes);
+                if (procName == "MFCreateMediaType") return reinterpret_cast<void*>(&Export_MFCreateMediaType);
+                if (procName == "MFCreateMemoryBuffer") return reinterpret_cast<void*>(&Export_MFCreateMemoryBuffer);
+                if (procName == "MFCreateSample") return reinterpret_cast<void*>(&Export_MFCreateSample);
+                if (procName == "MFCreateDXGIDeviceManager") return reinterpret_cast<void*>(&Export_MFCreateDXGIDeviceManager);
+                break;
+
+            case System32ModuleHandle::MFREADWRITE_DLL:
+                if (procName == "MFCreateSourceReaderFromURL") return reinterpret_cast<void*>(&Export_MFCreateSourceReaderFromURL);
+                if (procName == "MFCreateSourceReaderFromByteStream") return reinterpret_cast<void*>(&Export_MFCreateSourceReaderFromByteStream);
+                if (procName == "MFCreateSinkWriterFromURL") return reinterpret_cast<void*>(&Export_MFCreateSinkWriterFromURL);
+                break;
+
+            case System32ModuleHandle::DXCORE_DLL:
+                if (procName == "DXCoreCreateAdapterFactory") return reinterpret_cast<void*>(&Export_DXCoreCreateAdapterFactory);
+                break;
+
+            case System32ModuleHandle::VULKAN_1_DLL:
+                return reinterpret_cast<void*>(
+                    VulkanOpenGLSystem32::Export_vkGetInstanceProcAddr(nullptr, procName.data()));
+
+            case System32ModuleHandle::OPENGL32_DLL:
+                if (procName == "wglCreateContext") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglCreateContext);
+                if (procName == "wglDeleteContext") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglDeleteContext);
+                if (procName == "wglMakeCurrent") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglMakeCurrent);
+                if (procName == "wglGetCurrentContext") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglGetCurrentContext);
+                if (procName == "wglGetCurrentDC") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglGetCurrentDC);
+                if (procName == "wglGetProcAddress") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglGetProcAddress);
+                if (procName == "wglShareLists") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_wglShareLists);
+                if (procName == "glGetString") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_glGetString);
+                if (procName == "glClearColor") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_glClearColor);
+                if (procName == "glClear") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_glClear);
+                if (procName == "glViewport") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_glViewport);
+                if (procName == "glFlush") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_glFlush);
+                if (procName == "glFinish") return reinterpret_cast<void*>(&VulkanOpenGLSystem32::Export_glFinish);
                 break;
 
             default:

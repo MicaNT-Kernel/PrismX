@@ -106,6 +106,22 @@ target_link_libraries(dwrite PRIVATE prismx)
 add_library(dcomp SHARED src/dcomp_dll.cpp)
 target_link_libraries(dcomp PRIVATE prismx)
 
+add_library(mfplat SHARED src/mfplat_dll.cpp)
+target_link_libraries(mfplat PRIVATE prismx)
+
+add_library(mfreadwrite SHARED src/mfreadwrite_dll.cpp)
+target_link_libraries(mfreadwrite PRIVATE prismx)
+
+add_library(dxcore SHARED src/dxcore_dll.cpp)
+target_link_libraries(dxcore PRIVATE prismx)
+
+add_library(vulkan_1 SHARED src/vulkan_1_dll.cpp)
+target_link_libraries(vulkan_1 PRIVATE prismx)
+set_target_properties(vulkan_1 PROPERTIES OUTPUT_NAME "vulkan-1")
+
+add_library(opengl32 SHARED src/opengl32_dll.cpp)
+target_link_libraries(opengl32 PRIVATE prismx)
+
 set_target_properties(
     dxgi
     d3d12
@@ -118,6 +134,11 @@ set_target_properties(
     d2d1
     dwrite
     dcomp
+    mfplat
+    mfreadwrite
+    dxcore
+    vulkan_1
+    opengl32
     PROPERTIES
     PREFIX ""
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
@@ -126,5 +147,3 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
 )
-
-

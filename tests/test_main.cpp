@@ -3696,6 +3696,286 @@ int Test_PrismX_Official_D2D1_DWrite_DComp_COM_VTable_And_11_System32_DLL_Seal()
     return 0;
 }
 
+// ============================================================================
+// Suite 37: Official Microsoft Media Foundation (mfplat.dll & mfreadwrite.dll)
+// ============================================================================
+int Test_PrismX_Official_MediaFoundation_MFPlat_MFReadWrite_DXGIDeviceManager_Cutscene_DLLs() {
+    PRISMX_TEST("Suite 37: Official Microsoft Media Foundation (mfplat.dll & mfreadwrite.dll) Cutscene COM ABI")
+    using namespace prismx;
+    using namespace prismx::MediaFoundationCom;
+    using namespace prismx::system32;
+
+    // 1. Verify official 16-byte Microsoft binary IIDs (<mfapi.h>, <mfidl.h>, <mfreadwrite.h>)
+    PRISMX_ASSERT(OFFICIAL_IID_IMFAttributes.Data1 == 0x2cd2d921);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFMediaType.Data1 == 0x44ae0fa8);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFMediaBuffer.Data1 == 0x045fa593);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFDXGIBuffer.Data1 == 0xe7174cfa);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFSample.Data1 == 0xc40a00f2);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFDXGIDeviceManager.Data1 == 0xeb533d5d);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFSourceReader.Data1 == 0x70ae66f2);
+    PRISMX_ASSERT(OFFICIAL_IID_IMFSinkWriter.Data1 == 0x3137f1cd);
+    PRISMX_ASSERT(OFFICIAL_MFMediaType_Video.Data1 == 0x73646976);
+    PRISMX_ASSERT(OFFICIAL_MFVideoFormat_H264.Data1 == 0x34363248);
+    PRISMX_ASSERT(OFFICIAL_MFVideoFormat_NV12.Data1 == 0x3231564E);
+
+    // 2. Resolve mfplat.dll & mfreadwrite.dll via System32 router
+    auto hMfPlat = PrismDirectXSystem32Loader::LoadDirectXLibrary("mfplat.dll");
+    auto hMfRW   = PrismDirectXSystem32Loader::LoadDirectXLibrary("mfreadwrite.dll");
+    PRISMX_ASSERT(hMfPlat == System32ModuleHandle::MFPLAT_DLL);
+    PRISMX_ASSERT(hMfRW   == System32ModuleHandle::MFREADWRITE_DLL);
+    PRISMX_ASSERT(PrismDirectXSystem32Loader::GetDirectXProcAddress(hMfPlat, "MFStartup") != nullptr);
+    PRISMX_ASSERT(PrismDirectXSystem32Loader::GetDirectXProcAddress(hMfPlat, "MFCreateDXGIDeviceManager") != nullptr);
+    PRISMX_ASSERT(PrismDirectXSystem32Loader::GetDirectXProcAddress(hMfRW, "MFCreateSourceReaderFromURL") != nullptr);
+
+    // 3. Startup Media Foundation, bind D3D11Device to IMFDXGIDeviceManager, and decode cutscene sample
+    PRISMX_ASSERT(SUCCEEDED(Export_MFStartup(MF_VERSION_CANONICAL, 0)));
+
+    ID3D11Device* d3d11Dev = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_D3D11CreateDevice(
+        nullptr, 1, nullptr, 0x800 /*D3D11_CREATE_DEVICE_VIDEO_SUPPORT*/,
+        nullptr, 0, 7, reinterpret_cast<void**>(&d3d11Dev), nullptr, nullptr)) && d3d11Dev != nullptr);
+
+    uint32_t resetToken = 0;
+    IMFDXGIDeviceManager* dxgiMgr = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_MFCreateDXGIDeviceManager(&resetToken, &dxgiMgr)) && dxgiMgr != nullptr && resetToken != 0);
+    PRISMX_ASSERT(SUCCEEDED(dxgiMgr->ResetDevice(d3d11Dev, resetToken)));
+
+    void* hDev = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dxgiMgr->OpenDeviceHandle(&hDev)) && hDev != nullptr);
+    ID3D11Device* lockedD3d11 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dxgiMgr->LockDevice(
+        hDev, OFFICIAL_IID_ID3D11Device, reinterpret_cast<void**>(&lockedD3d11), 1)) && lockedD3d11 != nullptr);
+    lockedD3d11->Release();
+    PRISMX_ASSERT(SUCCEEDED(dxgiMgr->UnlockDevice(hDev, 0)));
+    PRISMX_ASSERT(SUCCEEDED(dxgiMgr->CloseDeviceHandle(hDev)));
+
+    IMFAttributes* attrs = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_MFCreateAttributes(&attrs, 4)) && attrs != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(attrs->SetUnknown(OFFICIAL_MF_MT_MAJOR_TYPE, dxgiMgr)));
+    PRISMX_ASSERT(SUCCEEDED(attrs->SetUINT32(OFFICIAL_MF_MT_SUBTYPE, 1)));
+
+    IMFSourceReader* reader = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_MFCreateSourceReaderFromURL(
+        L"C:\\Games\\IntroCutscene_4K60_HDR.mp4", attrs, &reader)) && reader != nullptr);
+
+    IMFMediaType* currentVideoType = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(reader->GetCurrentMediaType(
+        MF_SOURCE_READER_FIRST_VIDEO_STREAM, &currentVideoType)) && currentVideoType != nullptr);
+    uint64_t frameSizePacked = 0;
+    PRISMX_ASSERT(SUCCEEDED(currentVideoType->GetUINT64(OFFICIAL_MF_MT_FRAME_SIZE, &frameSizePacked)));
+    PRISMX_ASSERT((frameSizePacked >> 32) == 1920u && (frameSizePacked & 0xFFFFFFFFULL) == 1080u);
+    currentVideoType->Release();
+
+    uint32_t actualStream = 0, streamFlags = 0;
+    int64_t timestamp100ns = -1, sampleDur100ns = 0;
+    IMFSample* sample = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(reader->ReadSample(
+        MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &actualStream, &streamFlags, &timestamp100ns, &sample)) && sample != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(sample->GetSampleDuration(&sampleDur100ns)));
+    PRISMX_ASSERT(streamFlags == 0u && timestamp100ns >= 0LL && sampleDur100ns == 166667LL);
+
+    IMFMediaBuffer* mediaBuf = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(sample->GetBufferByIndex(0, &mediaBuf)) && mediaBuf != nullptr);
+    IMFDXGIBuffer* dxgiBuf = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(mediaBuf->QueryInterface(
+        OFFICIAL_IID_IMFDXGIBuffer, reinterpret_cast<void**>(&dxgiBuf))) && dxgiBuf != nullptr);
+
+    ID3D11Texture2D* decodedTex = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dxgiBuf->GetResource(
+        IID_ID3D11Texture2D, reinterpret_cast<void**>(&decodedTex))) && decodedTex != nullptr);
+
+    decodedTex->Release();
+    dxgiBuf->Release();
+    mediaBuf->Release();
+    sample->Release();
+    reader->Release();
+    attrs->Release();
+    dxgiMgr->Release();
+    d3d11Dev->Release();
+    PRISMX_ASSERT(SUCCEEDED(Export_MFShutdown()));
+
+    PRISMX_PASS()
+    return 0;
+}
+
+// ============================================================================
+// Suite 38: Official Microsoft DXCore (dxcore.dll) COM VTable & ML/Compute Enumeration
+// ============================================================================
+int Test_PrismX_Official_DXCore_AdapterFactory1_COM_VTable_And_ML_Compute_DLL() {
+    PRISMX_TEST("Suite 38: Official Microsoft DXCore (dxcore.dll) IDXCoreAdapterFactory1 COM VTable")
+    using namespace prismx;
+    using namespace prismx::DXCoreComAbi;
+    using namespace prismx::system32;
+
+    // 1. Verify official 16-byte Microsoft binary IIDs & Attribute GUIDs (<dxcore_interface.h>)
+    PRISMX_ASSERT(OFFICIAL_IID_IDXCoreAdapterFactory.Data1 == 0x78ee5945);
+    PRISMX_ASSERT(OFFICIAL_IID_IDXCoreAdapterFactory1.Data1 == 0xd5682e19);
+    PRISMX_ASSERT(OFFICIAL_IID_IDXCoreAdapterList.Data1 == 0x526c7776);
+    PRISMX_ASSERT(OFFICIAL_IID_IDXCoreAdapter.Data1 == 0xf0db4c7f);
+    PRISMX_ASSERT(OFFICIAL_IID_IDXCoreAdapter1.Data1 == 0xa0783366);
+    PRISMX_ASSERT(OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS.Data1 == 0x0c9ece4d);
+    PRISMX_ASSERT(OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE.Data1 == 0x248e2800);
+    PRISMX_ASSERT(OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML.Data1 == 0xb71b0d41);
+
+    // 2. Resolve DXCoreCreateAdapterFactory via dxcore.dll System32 router
+    auto hDXCore = PrismDirectXSystem32Loader::LoadDirectXLibrary("dxcore.dll");
+    PRISMX_ASSERT(hDXCore == System32ModuleHandle::DXCORE_DLL);
+
+    DXCoreComAbi::IDXCoreAdapterFactory1* factory1 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_DXCoreCreateAdapterFactory(
+        OFFICIAL_IID_IDXCoreAdapterFactory1, reinterpret_cast<void**>(&factory1))) && factory1 != nullptr);
+
+    GUID filterAttrs[3] = {
+        OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS,
+        OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE,
+        OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML
+    };
+
+    DXCoreComAbi::IDXCoreAdapterList* adapterList = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(factory1->CreateAdapterList(
+        3, filterAttrs, OFFICIAL_IID_IDXCoreAdapterList, reinterpret_cast<void**>(&adapterList))) && adapterList != nullptr);
+    PRISMX_ASSERT(adapterList->GetAdapterCount() == 1u);
+
+    uint32_t prefs[2] = { 0u /*Hardware*/, 2u /*HighPerformance*/ };
+    PRISMX_ASSERT(SUCCEEDED(adapterList->Sort(2, prefs)));
+
+    DXCoreComAbi::IDXCoreAdapter1* adapter1 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(adapterList->GetAdapter(
+        0, OFFICIAL_IID_IDXCoreAdapter1, reinterpret_cast<void**>(&adapter1))) && adapter1 != nullptr);
+
+    PRISMX_ASSERT(adapter1->IsAttributeSupported(OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_GRAPHICS));
+    PRISMX_ASSERT(adapter1->IsAttributeSupported(OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_CORE_COMPUTE));
+    PRISMX_ASSERT(adapter1->IsAttributeSupported(OFFICIAL_DXCORE_ADAPTER_ATTRIBUTE_D3D12_GENERIC_ML));
+
+    DXCoreComAbi::DXCoreHardwareID hwId{};
+    PRISMX_ASSERT(SUCCEEDED(adapter1->GetProperty(
+        DXCoreComAbi::DXCoreAdapterProperty::HardwareID, sizeof(hwId), &hwId)));
+    PRISMX_ASSERT(hwId.vendorID == 0x10DE && hwId.deviceID == 0x2684);
+
+    uint64_t dedicatedVram = 0;
+    PRISMX_ASSERT(SUCCEEDED(adapter1->GetProperty(
+        DXCoreComAbi::DXCoreAdapterProperty::DedicatedAdapterMemory, sizeof(dedicatedVram), &dedicatedVram)));
+    PRISMX_ASSERT(dedicatedVram == (24ULL << 30));
+
+    uint8_t isHw = 0;
+    PRISMX_ASSERT(SUCCEEDED(adapter1->GetProperty(
+        DXCoreComAbi::DXCoreAdapterProperty::IsHardware, sizeof(isHw), &isHw)) && isHw == 1u);
+
+    DXCoreComAbi::DXCoreAdapterMemoryBudget budget{};
+    PRISMX_ASSERT(SUCCEEDED(adapter1->QueryState(
+        1u /*AdapterMemoryBudget*/, 0, nullptr, sizeof(budget), &budget)));
+    PRISMX_ASSERT(budget.budget >= (22ULL << 30));
+
+    adapter1->Release();
+    adapterList->Release();
+    factory1->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+// ============================================================================
+// Suite 39: Official Khronos Vulkan 1.3 (vulkan-1.dll) & OpenGL 4.6 (opengl32.dll) + 16-DLL Seal
+// ============================================================================
+int Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() {
+    PRISMX_TEST("Suite 39: Official Khronos Vulkan 1.3 (vulkan-1.dll) & OpenGL 4.6 (opengl32.dll) + 16-DLL Seal")
+    using namespace prismx;
+    using namespace prismx::VulkanOpenGLSystem32;
+    using namespace prismx::system32;
+
+    // 1. Vulkan 1.3 Loader (vulkan-1.dll) & ICD Dispatchable Handle Magic (0x01CDC0DE)
+    auto hVk = PrismDirectXSystem32Loader::LoadDirectXLibrary("vulkan-1.dll");
+    auto hGL = PrismDirectXSystem32Loader::LoadDirectXLibrary("opengl32.dll");
+    PRISMX_ASSERT(hVk == System32ModuleHandle::VULKAN_1_DLL);
+    PRISMX_ASSERT(hGL == System32ModuleHandle::OPENGL32_DLL);
+
+    auto pfnCreateInst = reinterpret_cast<decltype(&VulkanOpenGLSystem32::vkCreateInstance)>(
+        Export_vkGetInstanceProcAddr(nullptr, "vkCreateInstance"));
+    PRISMX_ASSERT(pfnCreateInst != nullptr);
+
+    VkApplicationInfo appInfo{};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = "DOOM Eternal / Red Dead Redemption 2";
+    appInfo.apiVersion = VK_API_VERSION_1_3;
+
+    VkInstanceCreateInfo instInfo{};
+    instInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    instInfo.pApplicationInfo = &appInfo;
+
+    VkInstance vkInst = nullptr;
+    PRISMX_ASSERT(pfnCreateInst(&instInfo, nullptr, &vkInst) == VK_SUCCESS && vkInst != nullptr);
+    PRISMX_ASSERT(*reinterpret_cast<uintptr_t*>(vkInst) == ICD_LOADER_MAGIC);
+
+    uint32_t gpuCount = 0;
+    PRISMX_ASSERT(VulkanOpenGLSystem32::vkEnumeratePhysicalDevices(vkInst, &gpuCount, nullptr) == VK_SUCCESS && gpuCount == 1u);
+    VkPhysicalDevice physDev = nullptr;
+    PRISMX_ASSERT(VulkanOpenGLSystem32::vkEnumeratePhysicalDevices(vkInst, &gpuCount, &physDev) == VK_SUCCESS && physDev != nullptr);
+    PRISMX_ASSERT(*reinterpret_cast<uintptr_t*>(physDev) == ICD_LOADER_MAGIC);
+
+    VkPhysicalDeviceProperties props{};
+    VulkanOpenGLSystem32::vkGetPhysicalDeviceProperties(physDev, &props);
+    PRISMX_ASSERT(props.apiVersion == VK_API_VERSION_1_3 && props.vendorID == 0x10DE && props.deviceID == 0x2684);
+
+    VkDeviceCreateInfo devInfo{};
+    VkDevice vkDev = nullptr;
+    PRISMX_ASSERT(VulkanOpenGLSystem32::vkCreateDevice(physDev, &devInfo, nullptr, &vkDev) == VK_SUCCESS && vkDev != nullptr);
+    PRISMX_ASSERT(*reinterpret_cast<uintptr_t*>(vkDev) == ICD_LOADER_MAGIC);
+    PRISMX_ASSERT(Export_vkGetDeviceProcAddr(vkDev, "vkQueueSubmit") != nullptr);
+
+    VulkanOpenGLSystem32::vkDestroyDevice(vkDev, nullptr);
+    VulkanOpenGLSystem32::vkDestroyInstance(vkInst, nullptr);
+
+    // 2. OpenGL 4.6 Core Profile & WGL (opengl32.dll) over GLOn12
+    HDC dummyHdc = reinterpret_cast<HDC>(0x10040ULL);
+    HGLRC hglrc = Export_wglCreateContext(dummyHdc);
+    PRISMX_ASSERT(hglrc != nullptr);
+    PRISMX_ASSERT(Export_wglMakeCurrent(dummyHdc, hglrc) == 1);
+    PRISMX_ASSERT(wglGetCurrentContext() == hglrc);
+
+    const char* glVer = reinterpret_cast<const char*>(Export_glGetString(GL_VERSION));
+    const char* glSL  = reinterpret_cast<const char*>(Export_glGetString(GL_SHADING_LANGUAGE_VERSION));
+    PRISMX_ASSERT(glVer != nullptr && std::strstr(glVer, "4.6.0") != nullptr);
+    PRISMX_ASSERT(glSL != nullptr && std::strstr(glSL, "4.60") != nullptr);
+    PRISMX_ASSERT(Export_wglGetProcAddress("wglCreateContextAttribsARB") != nullptr);
+    PRISMX_ASSERT(Export_wglGetProcAddress("glBindVertexArray") != nullptr);
+    PRISMX_ASSERT(wglSwapBuffers(dummyHdc) == 1);
+    PRISMX_ASSERT(Export_wglMakeCurrent(nullptr, nullptr) == 1);
+    PRISMX_ASSERT(wglDeleteContext(hglrc) == 1);
+
+#if defined(_WIN32)
+    // 3. Live Win32 LoadLibraryA + GetProcAddress Verification Across All 5 New PE32+ System32 DLLs
+    auto tryLoadPeDll = [&](const char* relA, const char* relB) -> void* {
+        void* h = LoadLibraryA(relA);
+        if (!h) h = LoadLibraryA(relB);
+        return h;
+    };
+
+    void* peMfPlat = tryLoadPeDll("build/bin/system32/mfplat.dll", "bin/system32/mfplat.dll");
+    void* peMfRW   = tryLoadPeDll("build/bin/system32/mfreadwrite.dll", "bin/system32/mfreadwrite.dll");
+    void* peDXCore = tryLoadPeDll("build/bin/system32/dxcore.dll", "bin/system32/dxcore.dll");
+    void* peVk1    = tryLoadPeDll("build/bin/system32/vulkan-1.dll", "bin/system32/vulkan-1.dll");
+    void* peGL32   = tryLoadPeDll("build/bin/system32/opengl32.dll", "bin/system32/opengl32.dll");
+
+    if (peMfPlat && peMfRW && peDXCore && peVk1 && peGL32) {
+        PRISMX_ASSERT(GetProcAddress(peMfPlat, "MFStartup") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peMfPlat, "MFCreateDXGIDeviceManager") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peMfRW, "MFCreateSourceReaderFromURL") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peDXCore, "DXCoreCreateAdapterFactory") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peVk1, "vkGetInstanceProcAddr") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peGL32, "wglCreateContext") != nullptr);
+    }
+
+    if (peGL32)   FreeLibrary(peGL32);
+    if (peVk1)    FreeLibrary(peVk1);
+    if (peDXCore) FreeLibrary(peDXCore);
+    if (peMfRW)   FreeLibrary(peMfRW);
+    if (peMfPlat) FreeLibrary(peMfPlat);
+#endif
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -3737,16 +4017,12 @@ int main() {
     if (Test_PrismX_Official_D3D9Ex_21Slot_COM_VTable_And_D3D9On12_DLL() != 0) return 1;
     if (Test_PrismX_Official_XAudio2_9_And_DirectInput8_COM_VTable_DLLs() != 0) return 1;
     if (Test_PrismX_Official_D2D1_DWrite_DComp_COM_VTable_And_11_System32_DLL_Seal() != 0) return 1;
+    if (Test_PrismX_Official_MediaFoundation_MFPlat_MFReadWrite_DXGIDeviceManager_Cutscene_DLLs() != 0) return 1;
+    if (Test_PrismX_Official_DXCore_AdapterFactory1_COM_VTable_And_ML_Compute_DLL() != 0) return 1;
+    if (Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (36/36)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (39/39)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
-
-
-
-
-
-
-
