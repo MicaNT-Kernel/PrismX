@@ -38,4 +38,8 @@
 #include "prismx/directsr_vrs_rebar.hpp"
 #include "prismx/gpu_driven_indirect_sampler_feedback.hpp"
 #include "prismx/gameinput_spatial_audio_classic_ddraw.hpp"
+#include "prismx/hlsl_fxc_dxbc_compiler_sm51.hpp"
+#include "prismx/dxil_sm69_container_wave_vm.hpp"
+#include "prismx/spirv_dxil_cross_translator.hpp"
+
 

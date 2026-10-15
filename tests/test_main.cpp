@@ -2938,6 +2938,99 @@ int Test_PrismX_GameInput_8000Hz_StateObjectDB_PIX_And_ClassicDDraw7_D3D8() {
     return 0;
 }
 
+int Test_PrismX_HLSL_FXC_DXBC_Compiler_And_D3D12ShaderReflection() {
+    PRISMX_TEST("Test_PrismX_HLSL_FXC_DXBC_Compiler_And_D3D12ShaderReflection")
+
+    using namespace prismx::ShaderCompiler;
+
+    const char* hlslSource = R"(
+        cbuffer PerFrameCameraConstants : register(b0) { float4 g_LightDir; float4 g_Ambient; };
+        Texture2D g_AlbedoTexture : register(t0);
+        SamplerState g_LinearSampler : register(s0);
+        float4 PSMain(float4 pos : SV_POSITION, float3 norm : NORMAL, float2 uv : TEXCOORD0) : SV_TARGET {
+            float ndotl = saturate(dot(norm, g_LightDir.xyz));
+            float4 albedo = g_AlbedoTexture.Sample(g_LinearSampler, uv);
+            return albedo * ndotl + g_Ambient;
+        }
+    )";
+
+    ID3DBlob* codeBlob = nullptr;
+    ID3D12ShaderReflectionExt* reflection = nullptr;
+    HlslCompilationReport report{};
+
+    HRESULT hr = PrismHlslFxcCompiler::CompileHlslToDxbcAndExecute(
+        hlslSource, "PSMain", "ps_5_1", &codeBlob, &reflection, &report
+    );
+    PRISMX_ASSERT(SUCCEEDED(hr) && codeBlob != nullptr && reflection != nullptr);
+    PRISMX_ASSERT(report.compiledSuccessfully && report.majorVersion == 5 && report.minorVersion == 1);
+    PRISMX_ASSERT(report.cbufferCount == 1 && report.textureCount == 1 && report.samplerCount == 1);
+    PRISMX_ASSERT(report.emittedVmInstructions == 6 && report.dxbcContainerByteSize > 64);
+    PRISMX_ASSERT(report.sampleExecutionOutputColor.z() > 1.0f);
+
+    D3D12_SHADER_DESC_EXT shdrDesc{};
+    PRISMX_ASSERT(SUCCEEDED(reflection->GetDesc(&shdrDesc)));
+    PRISMX_ASSERT(shdrDesc.ConstantBuffers == 1 && shdrDesc.BoundResources == 3 && shdrDesc.InputParameters == 3);
+
+    D3D12_SHADER_INPUT_BIND_DESC_EXT bindDesc{};
+    PRISMX_ASSERT(SUCCEEDED(reflection->GetResourceBindingDesc(1, &bindDesc)));
+    PRISMX_ASSERT(bindDesc.Type == D3D_SIT_TEXTURE_EXT);
+
+    delete reflection;
+    codeBlob->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_DXIL_SM69_Container_And_Wave32_SIMD_VM() {
+    PRISMX_TEST("Test_PrismX_DXIL_SM69_Container_And_Wave32_SIMD_VM")
+
+    using namespace prismx::ShaderCompiler;
+
+    std::vector<PrismDxilInstruction> ops = {
+        {PrismHlslIntrinsicOp::IOP_WaveActiveBallot,       0, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_WaveActiveSum,          1, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_WavePrefixSum,          2, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_WaveActiveMax,          3, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_QuadReadAcrossX,        4, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_CreateResourceFromHeap, 5, 42, 0}
+    };
+
+    uint64_t featFlags = PRISM_SHADER_FEATURE_WAVE_OPS |
+                         PRISM_SHADER_FEATURE_RAYTRACING_TIER_1_1 |
+                         PRISM_SHADER_FEATURE_SAMPLER_FEEDBACK |
+                         PRISM_SHADER_FEATURE_RESOURCE_DESCRIPTOR_HEAP;
+
+    auto container = PrismWave32ShaderVM::BuildSm69DxilContainer(5 /*CS*/, 6, 9, featFlags, ops);
+    auto res       = PrismWave32ShaderVM::ParseAndExecuteWave32Simd(container.data(), container.size());
+
+    PRISMX_ASSERT(res.dxilContainerValid && res.hasSfi0Part && res.hasDxilPart && res.hasPsv0Part && res.hasHashPart);
+    PRISMX_ASSERT(res.shaderModelMajor == 6 && res.shaderModelMinor == 9);
+    PRISMX_ASSERT(res.waveLaneCount == 32 && res.activeBallotMask == 0xFFFFFFFFu);
+    PRISMX_ASSERT(res.waveActiveSumResult == 528.0f && res.wavePrefixSumLane31 == 496.0f && res.waveActiveMaxResult == 32.0f);
+    PRISMX_ASSERT(res.quadReadAcrossX_Lane0 == 2.0f && res.dynamicDescriptorHeapIndexBound == 42u);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_SPIRV16_DXIL_CrossTranslator_And_RootSignatureRemap() {
+    PRISMX_TEST("Test_PrismX_SPIRV16_DXIL_CrossTranslator_And_RootSignatureRemap")
+
+    using namespace prismx::ShaderCompiler;
+
+    auto spirvWords = PrismSpirvDxilCrossTranslator::BuildSampleSpirv16ShaderModule();
+    PrismSpirvCrossTranslationReport rep{};
+    PRISMX_ASSERT(SUCCEEDED(PrismSpirvDxilCrossTranslator::CrossTranslateSpirvToDxilAndExecute(spirvWords, &rep)));
+    PRISMX_ASSERT(rep.spirvHeaderValid && rep.spirvVersion == PRISM_SPIRV_VERSION_1_6);
+    PRISMX_ASSERT(rep.remappedDescriptorCount == 2);
+    PRISMX_ASSERT(rep.crossCompiledToDxilSm69 && rep.dxilContainerByteSize > 100);
+    PRISMX_ASSERT(rep.executedOnPrismShaderVm && rep.roundTripDxbcToSpirvVerified);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2967,9 +3060,12 @@ int main() {
     if (Test_PrismX_DirectSR_VRS_Tier2_And_ResizableBAR_GpuUploadHeap() != 0) return 1;
     if (Test_PrismX_ExecuteIndirect_NaniteCulling_And_SamplerFeedback_TiledTier4() != 0) return 1;
     if (Test_PrismX_GameInput_8000Hz_StateObjectDB_PIX_And_ClassicDDraw7_D3D8() != 0) return 1;
+    if (Test_PrismX_HLSL_FXC_DXBC_Compiler_And_D3D12ShaderReflection() != 0) return 1;
+    if (Test_PrismX_DXIL_SM69_Container_And_Wave32_SIMD_VM() != 0) return 1;
+    if (Test_PrismX_SPIRV16_DXIL_CrossTranslator_And_RootSignatureRemap() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (24/24)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (27/27)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
