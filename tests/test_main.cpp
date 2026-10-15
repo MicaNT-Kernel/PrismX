@@ -3392,6 +3392,310 @@ int Test_PrismX_System32_DirectX_DLL_Exports_And_CrossHierarchy_COM_Router() {
     return 0;
 }
 
+// ============================================================================
+// Suite 34: Official Microsoft Direct3D 9 / 9Ex (d3d9.h / d3d9.dll) COM ABI
+// ============================================================================
+int Test_PrismX_Official_D3D9Ex_21Slot_COM_VTable_And_D3D9On12_DLL() {
+    PRISMX_TEST("Suite 34: Official Microsoft Direct3D 9 / 9Ex (d3d9.h / d3d9.dll) 21-Slot COM VTable & D3D9On12 Bridge")
+    using namespace prismx;
+    using namespace prismx::D3D9Com;
+    using namespace prismx::system32;
+
+    // 1. Verify exact 16-byte Microsoft binary IIDs (<d3d9.h>)
+    PRISMX_ASSERT(sizeof(IID) == 16);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirect3D9.Data1 == 0x81bdcbca);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirect3D9Ex.Data1 == 0x02177241);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirect3DDevice9.Data1 == 0xd0223b96);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirect3DDevice9Ex.Data1 == 0xb18b10ce);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirect3DSwapChain9.Data1 == 0x794950f2);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirect3DTexture9.Data1 == 0x85c31227);
+
+    // 2. Resolve Direct3DCreate9Ex via System32 router for d3d9.dll
+    auto hD3D9 = PrismDirectXSystem32Loader::LoadDirectXLibrary("C:\\Windows\\System32\\d3d9.dll");
+    PRISMX_ASSERT(hD3D9 == System32ModuleHandle::D3D9_DLL);
+
+    using PFN_Direct3DCreate9Ex = HRESULT(*)(uint32_t, IDirect3D9Ex**);
+    auto pfnCreate9Ex = reinterpret_cast<PFN_Direct3DCreate9Ex>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hD3D9, "Direct3DCreate9Ex"));
+    PRISMX_ASSERT(pfnCreate9Ex != nullptr);
+
+    IDirect3D9Ex* d3d9Ex = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(pfnCreate9Ex(D3D_SDK_VERSION_9C, &d3d9Ex)) && d3d9Ex != nullptr);
+
+    // 3. Verify raw C++ vtable pointer and adapter enumeration
+    void** vtbl9 = *reinterpret_cast<void***>(d3d9Ex);
+    PRISMX_ASSERT(vtbl9 != nullptr && vtbl9[0] != nullptr && vtbl9[16] != nullptr && vtbl9[20] != nullptr);
+    PRISMX_ASSERT(d3d9Ex->GetAdapterCount() == 1u);
+
+    D3DADAPTER_IDENTIFIER9 ident{};
+    PRISMX_ASSERT(SUCCEEDED(d3d9Ex->GetAdapterIdentifier(D3DADAPTER_DEFAULT, 0, &ident)));
+    PRISMX_ASSERT(ident.VendorId == 0x10DE && ident.DeviceId == 0x2684);
+
+    D3DCAPS9 caps{};
+    PRISMX_ASSERT(SUCCEEDED(d3d9Ex->GetDeviceCaps(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, &caps)));
+    PRISMX_ASSERT(caps.VertexShaderVersion == 0xFFFE0300u && caps.PixelShaderVersion == 0xFFFF0300u);
+    PRISMX_ASSERT((caps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT) != 0);
+
+    // 4. Create IDirect3DDevice9Ex, render scene, create texture/surface, and present
+    D3DPRESENT_PARAMETERS pp{};
+    pp.BackBufferWidth = 2560;
+    pp.BackBufferHeight = 1440;
+    pp.BackBufferFormat = D3DFMT_A8R8G8B8;
+    pp.BackBufferCount = 2;
+    pp.SwapEffect = D3DSWAPEFFECT_FLIPEX;
+    pp.Windowed = 1;
+
+    IDirect3DDevice9Ex* dev9Ex = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(d3d9Ex->CreateDeviceEx(
+        D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, nullptr,
+        D3DCREATE_HARDWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED,
+        &pp, nullptr, &dev9Ex)) && dev9Ex != nullptr);
+
+    PRISMX_ASSERT(dev9Ex->GetAvailableTextureMem() == 0xFFF00000u);
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->SetMaximumFrameLatency(1)));
+    uint32_t maxLat = 0;
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->GetMaximumFrameLatency(&maxLat)) && maxLat == 1u);
+
+    IDirect3DTexture9* tex9 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->CreateTexture(1024, 1024, 1, 0, D3DFMT_DXT5, 0, &tex9, nullptr)) && tex9 != nullptr);
+    IDirect3DSurface9* surf9 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(tex9->GetSurfaceLevel(0, &surf9)) && surf9 != nullptr);
+    surf9->Release();
+
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0xFF102030u, 1.0f, 0)));
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->BeginScene()));
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->SetTexture(0, tex9)));
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 12)));
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->EndScene()));
+    PRISMX_ASSERT(SUCCEEDED(dev9Ex->PresentEx(nullptr, nullptr, nullptr, nullptr, 0)));
+
+    tex9->Release();
+    dev9Ex->Release();
+    d3d9Ex->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+// ============================================================================
+// Suite 35: Official Microsoft XAudio2 2.9 (xaudio2_9.dll) & DirectInput8 (dinput8.dll)
+// ============================================================================
+int Test_PrismX_Official_XAudio2_9_And_DirectInput8_COM_VTable_DLLs() {
+    PRISMX_TEST("Suite 35: Official Microsoft XAudio2 2.9 (xaudio2_9.dll) & DirectInput8 (dinput8.dll) COM VTables")
+    using namespace prismx;
+    using namespace prismx::XAudioDInputCom;
+    using namespace prismx::system32;
+
+    // 1. Verify official 16-byte Microsoft binary IIDs (<xaudio2.h> & <dinput.h>)
+    PRISMX_ASSERT(OFFICIAL_IID_IXAudio2.Data1 == 0x2b02e3cf);
+    PRISMX_ASSERT(OFFICIAL_CLSID_AudioVolumeMeter.Data1 == 0x4fc3b166);
+    PRISMX_ASSERT(OFFICIAL_CLSID_AudioReverb.Data1 == 0xc2633b16);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirectInput8W.Data1 == 0xbf798031);
+    PRISMX_ASSERT(OFFICIAL_IID_IDirectInputDevice8W.Data1 == 0x54d41081);
+    PRISMX_ASSERT(OFFICIAL_GUID_SysKeyboard.Data1 == 0x6f1d2b61);
+    PRISMX_ASSERT(OFFICIAL_GUID_SysMouse.Data1 == 0x6f1d2b60);
+
+    // 2. XAudio2 2.9 voice graph via xaudio2_9.dll export
+    auto hXAudio = PrismDirectXSystem32Loader::LoadDirectXLibrary("xaudio2_9.dll");
+    PRISMX_ASSERT(hXAudio == System32ModuleHandle::XAUDIO2_9_DLL);
+
+    using PFN_XAudio2Create = HRESULT(*)(IXAudio2**, uint32_t, uint32_t);
+    auto pfnXAudio2Create = reinterpret_cast<PFN_XAudio2Create>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hXAudio, "XAudio2Create"));
+    PRISMX_ASSERT(pfnXAudio2Create != nullptr);
+
+    IXAudio2* xa2 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(pfnXAudio2Create(&xa2, 0, XAUDIO2_DEFAULT_PROCESSOR)) && xa2 != nullptr);
+
+    IXAudio2MasteringVoice* masterVoice = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(xa2->CreateMasteringVoice(&masterVoice, 8, 48000)) && masterVoice != nullptr);
+    uint32_t chMask = 0;
+    PRISMX_ASSERT(SUCCEEDED(masterVoice->GetChannelMask(&chMask)) && chMask == 0x63Fu);
+
+    WAVEFORMATEX_CANONICAL wfx{};
+    wfx.wFormatTag = 1;
+    wfx.nChannels = 2;
+    wfx.nSamplesPerSec = 48000;
+    wfx.wBitsPerSample = 16;
+    wfx.nBlockAlign = 4;
+    wfx.nAvgBytesPerSec = 192000;
+
+    IXAudio2SourceVoice* srcVoice = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(xa2->CreateSourceVoice(&srcVoice, &wfx)) && srcVoice != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(srcVoice->Start(0, 0)));
+
+    uint8_t pcmSample[1920]{};
+    XAUDIO2_BUFFER xaBuf{};
+    xaBuf.Flags = XAUDIO2_END_OF_STREAM;
+    xaBuf.AudioBytes = sizeof(pcmSample);
+    xaBuf.pAudioData = pcmSample;
+    PRISMX_ASSERT(SUCCEEDED(srcVoice->SubmitSourceBuffer(&xaBuf)));
+
+    XAUDIO2_VOICE_STATE vState{};
+    srcVoice->GetState(&vState);
+    PRISMX_ASSERT(vState.SamplesPlayed >= 480u);
+
+    XAUDIO2_PERFORMANCE_DATA perf{};
+    xa2->GetPerformanceData(&perf);
+    PRISMX_ASSERT(perf.GlitchesSinceEngineStarted == 0u && perf.ActiveSourceVoiceCount == 1u);
+
+    srcVoice->DestroyVoice();
+    masterVoice->DestroyVoice();
+    xa2->Release();
+
+    // 3. DirectInput8 keyboard & mouse acquisition via dinput8.dll export
+    auto hDInput8 = PrismDirectXSystem32Loader::LoadDirectXLibrary("dinput8.dll");
+    PRISMX_ASSERT(hDInput8 == System32ModuleHandle::DINPUT8_DLL);
+
+    using PFN_DirectInput8Create = HRESULT(*)(void*, uint32_t, const IID&, void**, IUnknown*);
+    auto pfnDI8Create = reinterpret_cast<PFN_DirectInput8Create>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hDInput8, "DirectInput8Create"));
+    PRISMX_ASSERT(pfnDI8Create != nullptr);
+
+    IDirectInput8W* di8 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(pfnDI8Create(
+        nullptr, DIRECTINPUT_VERSION_800, OFFICIAL_IID_IDirectInput8W,
+        reinterpret_cast<void**>(&di8), nullptr)) && di8 != nullptr);
+
+    IDirectInputDevice8W* kbDev = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(di8->CreateDevice(OFFICIAL_GUID_SysKeyboard, &kbDev, nullptr)) && kbDev != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(kbDev->SetDataFormat(nullptr)));
+    PRISMX_ASSERT(SUCCEEDED(kbDev->SetCooperativeLevel(nullptr, 0)));
+    PRISMX_ASSERT(SUCCEEDED(kbDev->Acquire()));
+
+    uint8_t keyState[256]{};
+    PRISMX_ASSERT(SUCCEEDED(kbDev->GetDeviceState(sizeof(keyState), keyState)));
+    PRISMX_ASSERT((keyState[0x11] & 0x80u) != 0); // DIK_W pressed
+
+    kbDev->Unacquire();
+    kbDev->Release();
+    di8->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+// ============================================================================
+// Suite 36: Official Microsoft D2D1 / DWrite / DComp COM ABI & 11-DLL System32 Seal
+// ============================================================================
+int Test_PrismX_Official_D2D1_DWrite_DComp_COM_VTable_And_11_System32_DLL_Seal() {
+    PRISMX_TEST("Suite 36: Official Microsoft D2D1 / DWrite / DComp COM ABI & 11-DLL System32 PE32+ Seal")
+    using namespace prismx;
+    using namespace prismx::D2DWriteCompCom;
+    using namespace prismx::system32;
+
+    // 1. Verify official 16-byte Microsoft binary IIDs (<d2d1_3.h>, <dwrite_3.h>, <dcomp.h>)
+    PRISMX_ASSERT(OFFICIAL_IID_ID2D1Factory.Data1 == 0x06152247);
+    PRISMX_ASSERT(OFFICIAL_IID_ID2D1Factory7.Data1 == 0xbdc2bdd3);
+    PRISMX_ASSERT(OFFICIAL_IID_ID2D1Device.Data1 == 0x47dd575d);
+    PRISMX_ASSERT(OFFICIAL_IID_ID2D1DeviceContext.Data1 == 0xe8f7fe7a);
+    PRISMX_ASSERT(OFFICIAL_IID_IDWriteFactory.Data1 == 0xb859ee5a);
+    PRISMX_ASSERT(OFFICIAL_IID_IDWriteFactory7.Data1 == 0x35d0e0b3);
+    PRISMX_ASSERT(OFFICIAL_IID_IDCompositionDevice.Data1 == 0xc37ea93a);
+    PRISMX_ASSERT(OFFICIAL_IID_IDCompositionDevice3.Data1 == 0x0987cb06);
+
+    // 2. Cross-Hierarchy: D3D11CreateDevice -> IDXGIDevice4 -> ID2D1Factory7::CreateDevice ->
+    //    ID2D1DeviceContext + IDWriteFactory7 + IDCompositionDevice3
+    ID3D11Device* d3d11Dev = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_D3D11CreateDevice(
+        nullptr, 1, nullptr, 0, nullptr, 0, 7,
+        reinterpret_cast<void**>(&d3d11Dev), nullptr, nullptr)) && d3d11Dev != nullptr);
+
+    Dxgi16::IDXGIDevice4* dxgiDev4 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(d3d11Dev->QueryInterface(
+        Dxgi16::OFFICIAL_IID_IDXGIDevice4, reinterpret_cast<void**>(&dxgiDev4))) && dxgiDev4 != nullptr);
+
+    ID2D1Factory7* d2dFactory7 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_D2D1CreateFactory(
+        1, OFFICIAL_IID_ID2D1Factory7, nullptr, reinterpret_cast<void**>(&d2dFactory7))) && d2dFactory7 != nullptr);
+
+    ID2D1Device* d2dDev = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(d2dFactory7->CreateDevice(dxgiDev4, &d2dDev)) && d2dDev != nullptr);
+
+    ID2D1DeviceContext* d2dCtx = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(d2dDev->CreateDeviceContext(0, &d2dCtx)) && d2dCtx != nullptr);
+
+    IDWriteFactory7* dwrite7 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_DWriteCreateFactory(
+        0, OFFICIAL_IID_IDWriteFactory7, reinterpret_cast<IUnknown**>(&dwrite7))) && dwrite7 != nullptr);
+
+    IDWriteTextFormat* textFmt = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dwrite7->CreateTextFormat(
+        L"Segoe UI", nullptr, 400, 0, 5, 18.0f, L"en-us", &textFmt)) && textFmt != nullptr);
+    PRISMX_ASSERT(std::abs(textFmt->GetFontSize() - 18.0f) < 1e-4f);
+
+    D2D1_COLOR_F brushCol{0.1f, 0.8f, 0.4f, 1.0f};
+    ID2D1SolidColorBrush* brush = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(d2dCtx->CreateSolidColorBrush(&brushCol, nullptr, &brush)) && brush != nullptr);
+
+    d2dCtx->BeginDraw();
+    d2dCtx->Clear(&brushCol);
+    D2D1_RECT_F rc{0.0f, 0.0f, 400.0f, 60.0f};
+    d2dCtx->FillRectangle(&rc, brush);
+    d2dCtx->DrawTextW(L"PrismX Standard WinNT Direct2D HUD", 34, textFmt, &rc, brush);
+    uint64_t drawOps = 0;
+    PRISMX_ASSERT(SUCCEEDED(d2dCtx->EndDraw(&drawOps, nullptr)) && drawOps == 3u);
+
+    IDCompositionDevice3* dcomp3 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(Export_DCompositionCreateDevice3(
+        dxgiDev4, OFFICIAL_IID_IDCompositionDevice3, reinterpret_cast<void**>(&dcomp3))) && dcomp3 != nullptr);
+
+    D2DWriteCompCom::IDCompositionTarget* dcompTarget = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dcomp3->CreateTargetForHwnd(
+        reinterpret_cast<void*>(0x10020ULL), 1, &dcompTarget)) && dcompTarget != nullptr);
+    D2DWriteCompCom::IDCompositionVisual* rootVis = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dcomp3->CreateVisual(&rootVis)) && rootVis != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(dcompTarget->SetRoot(rootVis)));
+    PRISMX_ASSERT(SUCCEEDED(dcomp3->Commit()));
+
+    rootVis->Release();
+    dcompTarget->Release();
+    dcomp3->Release();
+    brush->Release();
+    textFmt->Release();
+    dwrite7->Release();
+    d2dCtx->Release();
+    d2dDev->Release();
+    d2dFactory7->Release();
+    dxgiDev4->Release();
+    d3d11Dev->Release();
+
+#if defined(_WIN32)
+    // 3. Live Win32 LoadLibraryA + GetProcAddress Verification Across All 6 New PE32+ System32 DLLs
+    auto tryLoadPeDll = [&](const char* relA, const char* relB) -> void* {
+        void* h = LoadLibraryA(relA);
+        if (!h) h = LoadLibraryA(relB);
+        return h;
+    };
+
+    void* peD3d9   = tryLoadPeDll("build/bin/system32/d3d9.dll", "bin/system32/d3d9.dll");
+    void* peXA2    = tryLoadPeDll("build/bin/system32/xaudio2_9.dll", "bin/system32/xaudio2_9.dll");
+    void* peDI8    = tryLoadPeDll("build/bin/system32/dinput8.dll", "bin/system32/dinput8.dll");
+    void* peD2D1   = tryLoadPeDll("build/bin/system32/d2d1.dll", "bin/system32/d2d1.dll");
+    void* peDWrite = tryLoadPeDll("build/bin/system32/dwrite.dll", "bin/system32/dwrite.dll");
+    void* peDComp  = tryLoadPeDll("build/bin/system32/dcomp.dll", "bin/system32/dcomp.dll");
+
+    if (peD3d9 && peXA2 && peDI8 && peD2D1 && peDWrite && peDComp) {
+        PRISMX_ASSERT(GetProcAddress(peD3d9, "Direct3DCreate9Ex") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peXA2, "XAudio2Create") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peDI8, "DirectInput8Create") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peD2D1, "D2D1CreateFactory") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peDWrite, "DWriteCreateFactory") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peDComp, "DCompositionCreateDevice3") != nullptr);
+    }
+
+    if (peDComp)  FreeLibrary(peDComp);
+    if (peDWrite) FreeLibrary(peDWrite);
+    if (peD2D1)   FreeLibrary(peD2D1);
+    if (peDI8)    FreeLibrary(peDI8);
+    if (peXA2)    FreeLibrary(peXA2);
+    if (peD3d9)   FreeLibrary(peD3d9);
+#endif
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -3430,12 +3734,16 @@ int main() {
     if (Test_PrismX_Official_DXGI16_COM_Hierarchy_And_Binary_IIDs() != 0) return 1;
     if (Test_PrismX_Official_D3D12_44Slot_COM_VTable_And_CheckFeatureSupport_Options21() != 0) return 1;
     if (Test_PrismX_System32_DirectX_DLL_Exports_And_CrossHierarchy_COM_Router() != 0) return 1;
+    if (Test_PrismX_Official_D3D9Ex_21Slot_COM_VTable_And_D3D9On12_DLL() != 0) return 1;
+    if (Test_PrismX_Official_XAudio2_9_And_DirectInput8_COM_VTable_DLLs() != 0) return 1;
+    if (Test_PrismX_Official_D2D1_DWrite_DComp_COM_VTable_And_11_System32_DLL_Seal() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (33/33)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (36/36)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
 
 
 

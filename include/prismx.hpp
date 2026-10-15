@@ -46,7 +46,11 @@
 #include "prismx/gaming_drm_denuvo_hwid_privacy_seal.hpp"
 #include "prismx/dxgi1_6_com_abi.hpp"
 #include "prismx/d3d12_com_vtable_options21.hpp"
+#include "prismx/d3d9_com_vtable_abi.hpp"
+#include "prismx/xaudio2_dinput8_com_abi.hpp"
+#include "prismx/d2d1_dwrite_dcomp_com_abi.hpp"
 #include "prismx/directx_system32_dll_exports.hpp"
+
 
 
 

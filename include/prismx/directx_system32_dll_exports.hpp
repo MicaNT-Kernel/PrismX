@@ -30,6 +30,9 @@
 #include "d3d11.hpp"
 #include "hlsl_fxc_dxbc_compiler_sm51.hpp"
 #include "xinput.hpp"
+#include "d3d9_com_vtable_abi.hpp"
+#include "xaudio2_dinput8_com_abi.hpp"
+#include "d2d1_dwrite_dcomp_com_abi.hpp"
 #include <cstring>
 #include <string>
 #include <string_view>
@@ -374,9 +377,117 @@ inline uint32_t Export_XInputSetState(uint32_t dwUserIndex, void* pVibration) {
     return xinput::XInputSetState(dwUserIndex, static_cast<xinput::XINPUT_VIBRATION*>(pVibration));
 }
 
+// --- d3d9.dll exports ---
+inline D3D9Com::IDirect3D9* Export_Direct3DCreate9(uint32_t SDKVersion) {
+    return D3D9Com::Direct3DCreate9(SDKVersion);
+}
+
+inline HRESULT Export_Direct3DCreate9Ex(uint32_t SDKVersion, D3D9Com::IDirect3D9Ex** ppD3D) {
+    return D3D9Com::Direct3DCreate9Ex(SDKVersion, ppD3D);
+}
+
+inline int32_t Export_D3DPERF_BeginEvent(uint32_t col, const wchar_t* wszName) {
+    return D3D9Com::D3DPERF_BeginEvent(col, wszName);
+}
+
+inline int32_t Export_D3DPERF_EndEvent() {
+    return D3D9Com::D3DPERF_EndEvent();
+}
+
+inline void Export_D3DPERF_SetMarker(uint32_t col, const wchar_t* wszName) {
+    D3D9Com::D3DPERF_SetMarker(col, wszName);
+}
+
+inline uint32_t Export_D3DPERF_GetStatus() {
+    return D3D9Com::D3DPERF_GetStatus();
+}
+
+// --- xaudio2_9.dll exports ---
+inline HRESULT Export_XAudio2Create(XAudioDInputCom::IXAudio2** ppXAudio2,
+                                    uint32_t Flags,
+                                    uint32_t XAudio2Processor) {
+    return XAudioDInputCom::XAudio2Create(ppXAudio2, Flags, XAudio2Processor);
+}
+
+inline HRESULT Export_CreateAudioVolumeMeter(IUnknown** ppApo) {
+    return XAudioDInputCom::CreateAudioVolumeMeter(ppApo);
+}
+
+inline HRESULT Export_CreateAudioReverb(IUnknown** ppApo) {
+    return XAudioDInputCom::CreateAudioReverb(ppApo);
+}
+
+// --- dinput8.dll exports ---
+inline HRESULT Export_DirectInput8Create(void* hinst, uint32_t dwVersion,
+                                         const IID& riidltf, void** ppvOut,
+                                         IUnknown* punkOuter) {
+    return XAudioDInputCom::DirectInput8Create(hinst, dwVersion, riidltf, ppvOut, punkOuter);
+}
+
+// --- d2d1.dll, dwrite.dll, dcomp.dll exports ---
+inline HRESULT Export_D2D1CreateFactory(uint32_t factoryType, const IID& riid,
+                                        const void* pFactoryOptions,
+                                        void** ppIFactory) {
+    return D2DWriteCompCom::D2D1CreateFactory(factoryType, riid, pFactoryOptions, ppIFactory);
+}
+
+inline HRESULT Export_D2D1CreateDevice(IDXGIDevice* dxgiDevice,
+                                       const void* creationProperties,
+                                       D2DWriteCompCom::ID2D1Device** d2dDevice) {
+    return D2DWriteCompCom::D2D1CreateDevice(dxgiDevice, creationProperties, d2dDevice);
+}
+
+inline HRESULT Export_D2D1CreateDeviceContext(IDXGISurface* dxgiSurface,
+                                              const void* creationProperties,
+                                              D2DWriteCompCom::ID2D1DeviceContext** d2dDeviceContext) {
+    return D2DWriteCompCom::D2D1CreateDeviceContext(dxgiSurface, creationProperties, d2dDeviceContext);
+}
+
+inline void Export_D2D1MakeRotateMatrix(float angle, D2DWriteCompCom::D2D1_POINT_2F center,
+                                        D2DWriteCompCom::D2D1_MATRIX_3X2_F* matrix) {
+    D2DWriteCompCom::D2D1MakeRotateMatrix(angle, center, matrix);
+}
+
+inline int32_t Export_D2D1IsMatrixInvertible(const D2DWriteCompCom::D2D1_MATRIX_3X2_F* matrix) {
+    return D2DWriteCompCom::D2D1IsMatrixInvertible(matrix);
+}
+
+inline int32_t Export_D2D1InvertMatrix(D2DWriteCompCom::D2D1_MATRIX_3X2_F* matrix) {
+    return D2DWriteCompCom::D2D1InvertMatrix(matrix);
+}
+
+inline HRESULT Export_DWriteCreateFactory(uint32_t factoryType, const IID& iid,
+                                          IUnknown** factory) {
+    return D2DWriteCompCom::DWriteCreateFactory(factoryType, iid, factory);
+}
+
+inline HRESULT Export_DCompositionCreateDevice(IDXGIDevice* dxgiDevice,
+                                               const IID& iid,
+                                               void** dcompositionDevice) {
+    return D2DWriteCompCom::DCompositionCreateDevice(dxgiDevice, iid, dcompositionDevice);
+}
+
+inline HRESULT Export_DCompositionCreateDevice2(IUnknown* renderingDevice,
+                                                const IID& iid,
+                                                void** dcompositionDevice) {
+    return D2DWriteCompCom::DCompositionCreateDevice2(renderingDevice, iid, dcompositionDevice);
+}
+
+inline HRESULT Export_DCompositionCreateDevice3(IUnknown* renderingDevice,
+                                                const IID& iid,
+                                                void** dcompositionDevice) {
+    return D2DWriteCompCom::DCompositionCreateDevice3(renderingDevice, iid, dcompositionDevice);
+}
+
+inline HRESULT Export_DCompositionCreateSurfaceHandle(uint32_t desiredAccess,
+                                                      void* securityAttributes,
+                                                      void** surfaceHandle) {
+    return D2DWriteCompCom::DCompositionCreateSurfaceHandle(desiredAccess, securityAttributes, surfaceHandle);
+}
+
 // ----------------------------------------------------------------------------
 // 4. PrismDirectXSystem32Loader — Dynamic Export Table & LoadLibrary/GetProcAddress
-//    Router for Windows Games (System32 + Agility SDK .\D3D12\D3D12Core.dll)
+//    Router for Windows Games (11 System32 DirectX DLLs + Agility SDK D3D12Core.dll)
 // ----------------------------------------------------------------------------
 enum class System32ModuleHandle : uintptr_t {
     Invalid         = 0,
@@ -384,8 +495,14 @@ enum class System32ModuleHandle : uintptr_t {
     D3D12CORE_DLL   = 0x00007FF8D3120618ULL,
     DXGI_DLL        = 0x00007FF8D8610000ULL,
     D3D11_DLL       = 0x00007FF8D3110000ULL,
+    D3D9_DLL        = 0x00007FF8D3090000ULL,
     D3DCOMPILER_47  = 0x00007FF8D3470000ULL,
-    XINPUT1_4_DLL   = 0x00007FF881140000ULL
+    XINPUT1_4_DLL   = 0x00007FF881140000ULL,
+    XAUDIO2_9_DLL   = 0x00007FF88A290000ULL,
+    DINPUT8_DLL     = 0x00007FF8D1080000ULL,
+    D2D1_DLL        = 0x00007FF8D2D10000ULL,
+    DWRITE_DLL      = 0x00007FF8D7710000ULL,
+    DCOMP_DLL       = 0x00007FF8DC000000ULL
 };
 
 class PrismDirectXSystem32Loader {
@@ -408,8 +525,14 @@ public:
         if (EndsWithIgnoreCase(path, "d3d12.dll") || EndsWithIgnoreCase(path, "d3d12")) return System32ModuleHandle::D3D12_DLL;
         if (EndsWithIgnoreCase(path, "dxgi.dll") || EndsWithIgnoreCase(path, "dxgi")) return System32ModuleHandle::DXGI_DLL;
         if (EndsWithIgnoreCase(path, "d3d11.dll") || EndsWithIgnoreCase(path, "d3d11")) return System32ModuleHandle::D3D11_DLL;
+        if (EndsWithIgnoreCase(path, "d3d9.dll") || EndsWithIgnoreCase(path, "d3d9")) return System32ModuleHandle::D3D9_DLL;
         if (EndsWithIgnoreCase(path, "d3dcompiler_47.dll") || EndsWithIgnoreCase(path, "d3dcompiler_43.dll")) return System32ModuleHandle::D3DCOMPILER_47;
         if (EndsWithIgnoreCase(path, "xinput1_4.dll") || EndsWithIgnoreCase(path, "xinput1_3.dll") || EndsWithIgnoreCase(path, "xinput9_1_0.dll")) return System32ModuleHandle::XINPUT1_4_DLL;
+        if (EndsWithIgnoreCase(path, "xaudio2_9.dll") || EndsWithIgnoreCase(path, "xaudio2_8.dll") || EndsWithIgnoreCase(path, "xaudio2_7.dll")) return System32ModuleHandle::XAUDIO2_9_DLL;
+        if (EndsWithIgnoreCase(path, "dinput8.dll") || EndsWithIgnoreCase(path, "dinput8")) return System32ModuleHandle::DINPUT8_DLL;
+        if (EndsWithIgnoreCase(path, "d2d1.dll") || EndsWithIgnoreCase(path, "d2d1")) return System32ModuleHandle::D2D1_DLL;
+        if (EndsWithIgnoreCase(path, "dwrite.dll") || EndsWithIgnoreCase(path, "dwrite")) return System32ModuleHandle::DWRITE_DLL;
+        if (EndsWithIgnoreCase(path, "dcomp.dll") || EndsWithIgnoreCase(path, "dcomp")) return System32ModuleHandle::DCOMP_DLL;
         return System32ModuleHandle::Invalid;
     }
 
@@ -437,6 +560,15 @@ public:
                 if (procName == "D3D11CreateDeviceAndSwapChain") return reinterpret_cast<void*>(&Export_D3D11CreateDeviceAndSwapChain);
                 break;
 
+            case System32ModuleHandle::D3D9_DLL:
+                if (procName == "Direct3DCreate9") return reinterpret_cast<void*>(&Export_Direct3DCreate9);
+                if (procName == "Direct3DCreate9Ex") return reinterpret_cast<void*>(&Export_Direct3DCreate9Ex);
+                if (procName == "D3DPERF_BeginEvent") return reinterpret_cast<void*>(&Export_D3DPERF_BeginEvent);
+                if (procName == "D3DPERF_EndEvent") return reinterpret_cast<void*>(&Export_D3DPERF_EndEvent);
+                if (procName == "D3DPERF_SetMarker") return reinterpret_cast<void*>(&Export_D3DPERF_SetMarker);
+                if (procName == "D3DPERF_GetStatus") return reinterpret_cast<void*>(&Export_D3DPERF_GetStatus);
+                break;
+
             case System32ModuleHandle::D3DCOMPILER_47:
                 if (procName == "D3DCompile") return reinterpret_cast<void*>(&Export_D3DCompile);
                 if (procName == "D3DCompile2") return reinterpret_cast<void*>(&Export_D3DCompile2);
@@ -447,6 +579,36 @@ public:
             case System32ModuleHandle::XINPUT1_4_DLL:
                 if (procName == "XInputGetState") return reinterpret_cast<void*>(&Export_XInputGetState);
                 if (procName == "XInputSetState") return reinterpret_cast<void*>(&Export_XInputSetState);
+                break;
+
+            case System32ModuleHandle::XAUDIO2_9_DLL:
+                if (procName == "XAudio2Create") return reinterpret_cast<void*>(&Export_XAudio2Create);
+                if (procName == "CreateAudioVolumeMeter") return reinterpret_cast<void*>(&Export_CreateAudioVolumeMeter);
+                if (procName == "CreateAudioReverb") return reinterpret_cast<void*>(&Export_CreateAudioReverb);
+                break;
+
+            case System32ModuleHandle::DINPUT8_DLL:
+                if (procName == "DirectInput8Create") return reinterpret_cast<void*>(&Export_DirectInput8Create);
+                break;
+
+            case System32ModuleHandle::D2D1_DLL:
+                if (procName == "D2D1CreateFactory") return reinterpret_cast<void*>(&Export_D2D1CreateFactory);
+                if (procName == "D2D1CreateDevice") return reinterpret_cast<void*>(&Export_D2D1CreateDevice);
+                if (procName == "D2D1CreateDeviceContext") return reinterpret_cast<void*>(&Export_D2D1CreateDeviceContext);
+                if (procName == "D2D1MakeRotateMatrix") return reinterpret_cast<void*>(&Export_D2D1MakeRotateMatrix);
+                if (procName == "D2D1IsMatrixInvertible") return reinterpret_cast<void*>(&Export_D2D1IsMatrixInvertible);
+                if (procName == "D2D1InvertMatrix") return reinterpret_cast<void*>(&Export_D2D1InvertMatrix);
+                break;
+
+            case System32ModuleHandle::DWRITE_DLL:
+                if (procName == "DWriteCreateFactory") return reinterpret_cast<void*>(&Export_DWriteCreateFactory);
+                break;
+
+            case System32ModuleHandle::DCOMP_DLL:
+                if (procName == "DCompositionCreateDevice") return reinterpret_cast<void*>(&Export_DCompositionCreateDevice);
+                if (procName == "DCompositionCreateDevice2") return reinterpret_cast<void*>(&Export_DCompositionCreateDevice2);
+                if (procName == "DCompositionCreateDevice3") return reinterpret_cast<void*>(&Export_DCompositionCreateDevice3);
+                if (procName == "DCompositionCreateSurfaceHandle") return reinterpret_cast<void*>(&Export_DCompositionCreateSurfaceHandle);
                 break;
 
             default:

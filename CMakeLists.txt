@@ -82,18 +82,42 @@ target_link_libraries(d3d12 PRIVATE prismx)
 add_library(d3d11 SHARED src/d3d11_dll.cpp)
 target_link_libraries(d3d11 PRIVATE prismx)
 
+add_library(d3d9 SHARED src/d3d9_dll.cpp)
+target_link_libraries(d3d9 PRIVATE prismx)
+
 add_library(d3dcompiler_47 SHARED src/d3dcompiler_47_dll.cpp)
 target_link_libraries(d3dcompiler_47 PRIVATE prismx)
 
 add_library(xinput1_4 SHARED src/xinput1_4_dll.cpp)
 target_link_libraries(xinput1_4 PRIVATE prismx)
 
+add_library(xaudio2_9 SHARED src/xaudio2_9_dll.cpp)
+target_link_libraries(xaudio2_9 PRIVATE prismx)
+
+add_library(dinput8 SHARED src/dinput8_dll.cpp)
+target_link_libraries(dinput8 PRIVATE prismx)
+
+add_library(d2d1 SHARED src/d2d1_dll.cpp)
+target_link_libraries(d2d1 PRIVATE prismx)
+
+add_library(dwrite SHARED src/dwrite_dll.cpp)
+target_link_libraries(dwrite PRIVATE prismx)
+
+add_library(dcomp SHARED src/dcomp_dll.cpp)
+target_link_libraries(dcomp PRIVATE prismx)
+
 set_target_properties(
     dxgi
     d3d12
     d3d11
+    d3d9
     d3dcompiler_47
     xinput1_4
+    xaudio2_9
+    dinput8
+    d2d1
+    dwrite
+    dcomp
     PROPERTIES
     PREFIX ""
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
@@ -102,4 +126,5 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
 )
+
 
