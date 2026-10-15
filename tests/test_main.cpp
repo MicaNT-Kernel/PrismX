@@ -3976,6 +3976,25 @@ int Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() {
     return 0;
 }
 
+int Test_PrismX_Official_Win32_HWND_Event_And_DWM_IndependentFlip_Interop() {
+    PRISMX_TEST("Suite 40: Official DirectX <-> WinNT Win32 HWND, Event HANDLE & DWM IndependentFlip Interop")
+
+    auto rep = prismx::win32_interop::DirectXWin32InteropVerifier::verifyWin32HwndAndEventInterop();
+    PRISMX_ASSERT(rep.boundHwnd == reinterpret_cast<void*>(static_cast<uintptr_t>(0x00000000000A0100ULL)));
+    PRISMX_ASSERT(rep.boundHMonitor == reinterpret_cast<void*>(static_cast<uintptr_t>(0x00010001ULL)));
+    PRISMX_ASSERT(rep.frameLatencyWaitableHandle != nullptr);
+    PRISMX_ASSERT(rep.width == 3840 && rep.height == 2160);
+    PRISMX_ASSERT(rep.maxFrameLatency == 1);
+    PRISMX_ASSERT(rep.independentFlipPromoted);
+    PRISMX_ASSERT(rep.vrrAllowTearingActive);
+    PRISMX_ASSERT(rep.fenceEventSignaled);
+    PRISMX_ASSERT(rep.completedFenceValue == 77ULL);
+    PRISMX_ASSERT(rep.qpcFrameTimestamp == 10'000'000ULL);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4020,9 +4039,11 @@ int main() {
     if (Test_PrismX_Official_MediaFoundation_MFPlat_MFReadWrite_DXGIDeviceManager_Cutscene_DLLs() != 0) return 1;
     if (Test_PrismX_Official_DXCore_AdapterFactory1_COM_VTable_And_ML_Compute_DLL() != 0) return 1;
     if (Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() != 0) return 1;
+    if (Test_PrismX_Official_Win32_HWND_Event_And_DWM_IndependentFlip_Interop() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (39/39)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (40/40)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
