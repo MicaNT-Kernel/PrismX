@@ -44,6 +44,10 @@
 #include "prismx/anticheat_eac_battleye_swapchain_guard.hpp"
 #include "prismx/vanguard_ricochet_iommu_vram_shield.hpp"
 #include "prismx/gaming_drm_denuvo_hwid_privacy_seal.hpp"
+#include "prismx/dxgi1_6_com_abi.hpp"
+#include "prismx/d3d12_com_vtable_options21.hpp"
+#include "prismx/directx_system32_dll_exports.hpp"
+
 
 
 

@@ -3084,6 +3084,314 @@ int Test_PrismX_GamingDRM_Denuvo_VMProtect_And_SaltedHwidVault() {
     return 0;
 }
 
+int Test_PrismX_Official_DXGI16_COM_Hierarchy_And_Binary_IIDs() {
+    PRISMX_TEST("Test_PrismX_Official_DXGI16_COM_Hierarchy_And_Binary_IIDs")
+
+    using namespace prismx::Dxgi16;
+
+    IDXGIFactory7* factory7 = nullptr;
+    HRESULT hr = CreateDXGIFactory2(0, OFFICIAL_IID_IDXGIFactory7, reinterpret_cast<void**>(&factory7));
+    PRISMX_ASSERT(SUCCEEDED(hr) && factory7 != nullptr);
+
+    // Verify full COM inheritance chain QueryInterface with official Microsoft GUIDs
+    void* fac1 = nullptr;
+    void* fac2 = nullptr;
+    void* fac4 = nullptr;
+    void* fac6 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(factory7->QueryInterface(OFFICIAL_IID_IDXGIFactory1, &fac1)) && fac1 != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(factory7->QueryInterface(OFFICIAL_IID_IDXGIFactory2, &fac2)) && fac2 != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(factory7->QueryInterface(OFFICIAL_IID_IDXGIFactory4, &fac4)) && fac4 != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(factory7->QueryInterface(OFFICIAL_IID_IDXGIFactory6, &fac6)) && fac6 != nullptr);
+    static_cast<IUnknown*>(fac1)->Release();
+    static_cast<IUnknown*>(fac2)->Release();
+    static_cast<IUnknown*>(fac4)->Release();
+    static_cast<IUnknown*>(fac6)->Release();
+
+    // CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING)
+    int32_t allowTearing = 0;
+    PRISMX_ASSERT(SUCCEEDED(factory7->CheckFeatureSupport(
+        DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing))));
+    PRISMX_ASSERT(allowTearing == 1);
+
+    // EnumAdapterByGpuPreference -> IDXGIAdapter4
+    IDXGIAdapter4* adapter4 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(factory7->EnumAdapterByGpuPreference(
+        0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, OFFICIAL_IID_IDXGIAdapter4, reinterpret_cast<void**>(&adapter4))));
+    PRISMX_ASSERT(adapter4 != nullptr);
+
+    DXGI_ADAPTER_DESC3 desc3{};
+    PRISMX_ASSERT(SUCCEEDED(adapter4->GetDesc3(&desc3)));
+    PRISMX_ASSERT(desc3.VendorId == 0x13B5u);
+    PRISMX_ASSERT(desc3.DedicatedVideoMemory == 16ULL * 1024ULL * 1024ULL * 1024ULL);
+
+    DXGI_QUERY_VIDEO_MEMORY_INFO vramInfo{};
+    PRISMX_ASSERT(SUCCEEDED(adapter4->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &vramInfo)));
+    PRISMX_ASSERT(vramInfo.Budget == 16ULL * 1024ULL * 1024ULL * 1024ULL);
+
+    // Adapter -> GetParent(OFFICIAL_IID_IDXGIFactory7)
+    IDXGIFactory7* parentFactory = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(adapter4->GetParent(OFFICIAL_IID_IDXGIFactory7, reinterpret_cast<void**>(&parentFactory))));
+    PRISMX_ASSERT(parentFactory == factory7);
+    parentFactory->Release();
+
+    // CreateSwapChainForHwnd -> IDXGISwapChain4
+    DXGI_SWAP_CHAIN_DESC1 scDesc{};
+    scDesc.Width       = 3840;
+    scDesc.Height      = 2160;
+    scDesc.Format      = DXGI_FORMAT_B8G8R8A8_UNORM;
+    scDesc.BufferCount = 3;
+    scDesc.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+
+    IDXGISwapChain4* swapChain4 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(factory7->CreateSwapChainForHwnd(
+        adapter4, reinterpret_cast<void*>(0x1234ULL), &scDesc, nullptr, nullptr, &swapChain4)));
+    PRISMX_ASSERT(swapChain4 != nullptr);
+    PRISMX_ASSERT(swapChain4->GetCurrentBackBufferIndex() == 0u);
+    PRISMX_ASSERT(SUCCEEDED(swapChain4->Present(0, 0)));
+    PRISMX_ASSERT(swapChain4->GetCurrentBackBufferIndex() == 1u);
+    PRISMX_ASSERT(SUCCEEDED(swapChain4->Present(0, 0)));
+    PRISMX_ASSERT(swapChain4->GetCurrentBackBufferIndex() == 2u);
+    PRISMX_ASSERT(SUCCEEDED(swapChain4->Present(0, 0)));
+    PRISMX_ASSERT(swapChain4->GetCurrentBackBufferIndex() == 0u);
+
+    uint32_t colorSpaceSupport = 0;
+    PRISMX_ASSERT(SUCCEEDED(swapChain4->CheckColorSpaceSupport(0, &colorSpaceSupport)) && colorSpaceSupport != 0);
+
+    swapChain4->Release();
+    adapter4->Release();
+    factory7->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_Official_D3D12_44Slot_COM_VTable_And_CheckFeatureSupport_Options21() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_44Slot_COM_VTable_And_CheckFeatureSupport_Options21")
+
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Agility SDK D3D12GetInterface(CLSID_D3D12SDKConfiguration)
+    ID3D12SDKConfigurationAbi* sdkConfig = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(D3D12GetInterfaceAbi(
+        OFFICIAL_CLSID_D3D12SDKConfiguration,
+        OFFICIAL_IID_ID3D12SDKConfiguration,
+        reinterpret_cast<void**>(&sdkConfig))));
+    PRISMX_ASSERT(sdkConfig != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(sdkConfig->SetSDKVersion(614u, ".\\D3D12\\")));
+    sdkConfig->Release();
+
+    // 2. Canonical 44-Slot ID3D12Device -> ID3D12Device14 COM Object
+    auto* rawDev = new PrismD3D12Device14CanonicalImpl();
+    ID3D12DeviceCanonicalVTable* dev14 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(rawDev->QueryInterface(OFFICIAL_IID_ID3D12Device14, reinterpret_cast<void**>(&dev14))));
+    PRISMX_ASSERT(dev14 != nullptr);
+    rawDev->Release();
+
+    // QueryInterface across ID3D12Device, ID3D12Device5, ID3D12Device8, ID3D12Device10
+    void* d0 = nullptr; void* d5 = nullptr; void* d8 = nullptr; void* d10 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dev14->QueryInterface(OFFICIAL_IID_ID3D12Device, &d0)) && d0 != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(dev14->QueryInterface(OFFICIAL_IID_ID3D12Device5, &d5)) && d5 != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(dev14->QueryInterface(OFFICIAL_IID_ID3D12Device8, &d8)) && d8 != nullptr);
+    PRISMX_ASSERT(SUCCEEDED(dev14->QueryInterface(OFFICIAL_IID_ID3D12Device10, &d10)) && d10 != nullptr);
+    static_cast<IUnknown*>(d0)->Release();
+    static_cast<IUnknown*>(d5)->Release();
+    static_cast<IUnknown*>(d8)->Release();
+    static_cast<IUnknown*>(d10)->Release();
+
+    // Verify 44-slot methods and CheckFeatureSupport (OPTIONS .. OPTIONS21)
+    PRISMX_ASSERT(dev14->GetNodeCount() == 1u);
+    PRISMX_ASSERT(dev14->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV) == 32u);
+    PRISMX_ASSERT(dev14->GetDeviceRemovedReason() == S_OK);
+    PRISMX_ASSERT(dev14->GetAdapterLuid().LowPart == 0x1000u);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI opt0{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS, &opt0, sizeof(opt0))));
+    PRISMX_ASSERT(opt0.ResourceBindingTier == 3u && opt0.TiledResourcesTier == 4u && opt0.ResourceHeapTier == 2u);
+
+    D3D12_FEATURE_DATA_SHADER_MODEL_ABI sm{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_SHADER_MODEL, &sm, sizeof(sm))));
+    PRISMX_ASSERT(sm.HighestShaderModel == 0x69u);
+
+    D3D12_FEATURE_DATA_ROOT_SIGNATURE_ABI rs{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_ROOT_SIGNATURE, &rs, sizeof(rs))));
+    PRISMX_ASSERT(rs.HighestVersion == 0x3u);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS1_ABI opt1{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS1, &opt1, sizeof(opt1))));
+    PRISMX_ASSERT(opt1.WaveOps == 1 && opt1.WaveLaneCountMin == 32u);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5_ABI opt5{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS5, &opt5, sizeof(opt5))));
+    PRISMX_ASSERT(opt5.RaytracingTier == 11u && opt5.RenderPassesTier == 2u);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS6_ABI opt6{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS6, &opt6, sizeof(opt6))));
+    PRISMX_ASSERT(opt6.VariableShadingRateTier == 2u && opt6.ShadingRateImageTileSize == 16u);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS7_ABI opt7{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS7, &opt7, sizeof(opt7))));
+    PRISMX_ASSERT(opt7.MeshShaderTier == 10u && opt7.SamplerFeedbackTier == 100u);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS12_ABI opt12{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS12, &opt12, sizeof(opt12))));
+    PRISMX_ASSERT(opt12.EnhancedBarriersSupported == 1);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI opt16{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS16, &opt16, sizeof(opt16))));
+    PRISMX_ASSERT(opt16.GPUUploadHeapSupported == 1);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI opt21{};
+    PRISMX_ASSERT(SUCCEEDED(dev14->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS21, &opt21, sizeof(opt21))));
+    PRISMX_ASSERT(opt21.WorkGraphsTier == 11u && opt21.ExecuteIndirectTier == 11u);
+
+    dev14->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+#if defined(_WIN32)
+extern "C" __declspec(dllimport) void* __stdcall LoadLibraryA(const char* lpLibFileName);
+extern "C" __declspec(dllimport) void* __stdcall GetProcAddress(void* hModule, const char* lpProcName);
+extern "C" __declspec(dllimport) int   __stdcall FreeLibrary(void* hLibModule);
+#endif
+
+int Test_PrismX_System32_DirectX_DLL_Exports_And_CrossHierarchy_COM_Router() {
+    PRISMX_TEST("Test_PrismX_System32_DirectX_DLL_Exports_And_CrossHierarchy_COM_Router")
+
+    using namespace prismx::system32;
+
+    // 1. Dynamic Loader Resolution for d3d12.dll, D3D12Core.dll, dxgi.dll, d3d11.dll, d3dcompiler_47.dll, xinput1_4.dll
+    auto hD3D12     = PrismDirectXSystem32Loader::LoadDirectXLibrary("C:\\Windows\\System32\\d3d12.dll");
+    auto hD3D12Core = PrismDirectXSystem32Loader::LoadDirectXLibrary(".\\D3D12\\D3D12Core.dll");
+    auto hDXGI      = PrismDirectXSystem32Loader::LoadDirectXLibrary("dxgi.dll");
+    auto hD3D11     = PrismDirectXSystem32Loader::LoadDirectXLibrary("d3d11.dll");
+    auto hCompiler  = PrismDirectXSystem32Loader::LoadDirectXLibrary("d3dcompiler_47.dll");
+    auto hXInput    = PrismDirectXSystem32Loader::LoadDirectXLibrary("xinput1_4.dll");
+
+    PRISMX_ASSERT(hD3D12 != System32ModuleHandle::Invalid);
+    PRISMX_ASSERT(hD3D12Core != System32ModuleHandle::Invalid);
+    PRISMX_ASSERT(hDXGI != System32ModuleHandle::Invalid);
+    PRISMX_ASSERT(hD3D11 != System32ModuleHandle::Invalid);
+    PRISMX_ASSERT(hCompiler != System32ModuleHandle::Invalid);
+    PRISMX_ASSERT(hXInput != System32ModuleHandle::Invalid);
+
+    // 2. Resolve and invoke D3D11CreateDevice -> QueryInterface(IDXGIDevice4) -> GetAdapter -> GetParent(IDXGIFactory7) -> CreateSwapChainForHwnd
+    using PFN_D3D11CreateDevice = HRESULT(*)(IUnknown*, uint32_t, void*, uint32_t, const uint32_t*, uint32_t, uint32_t, void**, uint32_t*, void**);
+    auto pfnD3D11CreateDevice = reinterpret_cast<PFN_D3D11CreateDevice>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hD3D11, "D3D11CreateDevice"));
+    PRISMX_ASSERT(pfnD3D11CreateDevice != nullptr);
+
+    ID3D11Device* d3d11Dev = nullptr;
+    ID3D11DeviceContext* d3d11Ctx = nullptr;
+    uint32_t flOut = 0;
+    PRISMX_ASSERT(SUCCEEDED(pfnD3D11CreateDevice(
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, nullptr, 0, 7,
+        reinterpret_cast<void**>(&d3d11Dev), &flOut, reinterpret_cast<void**>(&d3d11Ctx))));
+    PRISMX_ASSERT(d3d11Dev != nullptr && d3d11Ctx != nullptr);
+
+    // Cross-hierarchy COM navigation (exact UE4/UE5/Unity D3D11 init flow!)
+    Dxgi16::IDXGIDevice4* dxgiDev4 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(d3d11Dev->QueryInterface(
+        Dxgi16::OFFICIAL_IID_IDXGIDevice4, reinterpret_cast<void**>(&dxgiDev4))));
+    PRISMX_ASSERT(dxgiDev4 != nullptr);
+
+    IDXGIAdapter* dxgiAdapter = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dxgiDev4->GetAdapter(&dxgiAdapter)) && dxgiAdapter != nullptr);
+
+    Dxgi16::IDXGIFactory7* dxgiFactory7 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dxgiAdapter->GetParent(
+        Dxgi16::OFFICIAL_IID_IDXGIFactory7, reinterpret_cast<void**>(&dxgiFactory7))) && dxgiFactory7 != nullptr);
+
+    Dxgi16::DXGI_SWAP_CHAIN_DESC1 scDesc1{};
+    scDesc1.Width = 1920; scDesc1.Height = 1080; scDesc1.Format = DXGI_FORMAT_B8G8R8A8_UNORM; scDesc1.BufferCount = 2;
+    Dxgi16::IDXGISwapChain4* sc4 = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(dxgiFactory7->CreateSwapChainForHwnd(
+        d3d11Dev, reinterpret_cast<void*>(0xBEEFULL), &scDesc1, nullptr, nullptr, &sc4)) && sc4 != nullptr);
+
+    sc4->Release();
+    dxgiFactory7->Release();
+    dxgiAdapter->Release();
+    dxgiDev4->Release();
+    d3d11Ctx->Release();
+    d3d11Dev->Release();
+
+    // 3. Resolve and invoke D3DCompile from d3dcompiler_47.dll
+    using PFN_D3DCompile = HRESULT(*)(const void*, size_t, const char*, const void*, void*, const char*, const char*, uint32_t, uint32_t, void**, void**);
+    auto pfnD3DCompile = reinterpret_cast<PFN_D3DCompile>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hCompiler, "D3DCompile"));
+    PRISMX_ASSERT(pfnD3DCompile != nullptr);
+
+    const char* miniHlsl = "cbuffer CB : register(b0) { float4 c; }; float4 main(float4 p : SV_POSITION) : SV_TARGET { return p; }";
+    ID3DBlob* compiledBlob = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(pfnD3DCompile(
+        miniHlsl, std::strlen(miniHlsl), "mini.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0,
+        reinterpret_cast<void**>(&compiledBlob), nullptr)));
+    PRISMX_ASSERT(compiledBlob != nullptr && compiledBlob->GetBufferSize() >= 32);
+    compiledBlob->Release();
+
+    // 4. Resolve and invoke D3D12CreateDevice & D3D12SerializeVersionedRootSignature from d3d12.dll
+    using PFN_D3D12CreateDevice = HRESULT(*)(IUnknown*, uint32_t, const IID&, void**);
+    auto pfnD3D12CreateDevice = reinterpret_cast<PFN_D3D12CreateDevice>(
+        PrismDirectXSystem32Loader::GetDirectXProcAddress(hD3D12, "D3D12CreateDevice"));
+    PRISMX_ASSERT(pfnD3D12CreateDevice != nullptr);
+
+    D3D12ComAbi::ID3D12DeviceCanonicalVTable* d3d12Dev = nullptr;
+    PRISMX_ASSERT(SUCCEEDED(pfnD3D12CreateDevice(
+        nullptr, D3D_FEATURE_LEVEL_12_2, D3D12ComAbi::OFFICIAL_IID_ID3D12Device14, reinterpret_cast<void**>(&d3d12Dev))));
+    PRISMX_ASSERT(d3d12Dev != nullptr && d3d12Dev->GetNodeCount() == 1u);
+    d3d12Dev->Release();
+
+#if defined(_WIN32)
+    // 5. Live Win32 PE32+ Shared Library LoadLibraryA + GetProcAddress Verification
+
+    auto tryLoadPeDll = [&](const char* relA, const char* relB) -> void* {
+        void* h = LoadLibraryA(relA);
+        if (!h) h = LoadLibraryA(relB);
+        return h;
+    };
+
+    void* peDxgi  = tryLoadPeDll("build/bin/system32/dxgi.dll", "bin/system32/dxgi.dll");
+    void* peD3d12 = tryLoadPeDll("build/bin/system32/d3d12.dll", "bin/system32/d3d12.dll");
+    void* peD3d11 = tryLoadPeDll("build/bin/system32/d3d11.dll", "bin/system32/d3d11.dll");
+    void* peFxc   = tryLoadPeDll("build/bin/system32/d3dcompiler_47.dll", "bin/system32/d3dcompiler_47.dll");
+    void* peXIn   = tryLoadPeDll("build/bin/system32/xinput1_4.dll", "bin/system32/xinput1_4.dll");
+
+    if (peDxgi && peD3d12 && peD3d11 && peFxc && peXIn) {
+        using PFN_CreateDXGIFactory2 = HRESULT(*)(uint32_t, const IID&, void**);
+        auto dllCreateDXGIFactory2 = reinterpret_cast<PFN_CreateDXGIFactory2>(
+            GetProcAddress(peDxgi, "CreateDXGIFactory2"));
+        PRISMX_ASSERT(dllCreateDXGIFactory2 != nullptr);
+
+        Dxgi16::IDXGIFactory7* dllFac7 = nullptr;
+        PRISMX_ASSERT(SUCCEEDED(dllCreateDXGIFactory2(
+            0, Dxgi16::OFFICIAL_IID_IDXGIFactory7, reinterpret_cast<void**>(&dllFac7))) && dllFac7 != nullptr);
+        dllFac7->Release();
+
+        auto dllD3D12CreateDevice = reinterpret_cast<PFN_D3D12CreateDevice>(
+            GetProcAddress(peD3d12, "D3D12CreateDevice"));
+        PRISMX_ASSERT(dllD3D12CreateDevice != nullptr);
+
+        D3D12ComAbi::ID3D12DeviceCanonicalVTable* dllDev14 = nullptr;
+        PRISMX_ASSERT(SUCCEEDED(dllD3D12CreateDevice(
+            nullptr, D3D_FEATURE_LEVEL_12_2, D3D12ComAbi::OFFICIAL_IID_ID3D12Device14, reinterpret_cast<void**>(&dllDev14))) && dllDev14 != nullptr);
+        dllDev14->Release();
+
+        PRISMX_ASSERT(GetProcAddress(peD3d11, "D3D11CreateDevice") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peFxc, "D3DCompile") != nullptr);
+        PRISMX_ASSERT(GetProcAddress(peXIn, "XInputGetState") != nullptr);
+    }
+    if (peXIn)   FreeLibrary(peXIn);
+    if (peFxc)   FreeLibrary(peFxc);
+    if (peD3d11) FreeLibrary(peD3d11);
+    if (peD3d12) FreeLibrary(peD3d12);
+    if (peDxgi)  FreeLibrary(peDxgi);
+#endif
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -3119,12 +3427,16 @@ int main() {
     if (Test_PrismX_Ring0_AntiCheat_EAC_BattlEye_And_SwapChainGuard() != 0) return 1;
     if (Test_PrismX_Vanguard_Ricochet_HVCI_TPM20_And_IOMMU_VramShield() != 0) return 1;
     if (Test_PrismX_GamingDRM_Denuvo_VMProtect_And_SaltedHwidVault() != 0) return 1;
+    if (Test_PrismX_Official_DXGI16_COM_Hierarchy_And_Binary_IIDs() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_44Slot_COM_VTable_And_CheckFeatureSupport_Options21() != 0) return 1;
+    if (Test_PrismX_System32_DirectX_DLL_Exports_And_CrossHierarchy_COM_Router() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (30/30)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (33/33)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
+
 
 
 

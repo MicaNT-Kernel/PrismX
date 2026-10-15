@@ -71,3 +71,35 @@ set_target_properties(
     prismx_multimedia_demo
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
+
+# Canonical Microsoft DirectX System32 Shared Libraries (.dll / .so)
+add_library(dxgi SHARED src/dxgi_dll.cpp)
+target_link_libraries(dxgi PRIVATE prismx)
+
+add_library(d3d12 SHARED src/d3d12_dll.cpp)
+target_link_libraries(d3d12 PRIVATE prismx)
+
+add_library(d3d11 SHARED src/d3d11_dll.cpp)
+target_link_libraries(d3d11 PRIVATE prismx)
+
+add_library(d3dcompiler_47 SHARED src/d3dcompiler_47_dll.cpp)
+target_link_libraries(d3dcompiler_47 PRIVATE prismx)
+
+add_library(xinput1_4 SHARED src/xinput1_4_dll.cpp)
+target_link_libraries(xinput1_4 PRIVATE prismx)
+
+set_target_properties(
+    dxgi
+    d3d12
+    d3d11
+    d3dcompiler_47
+    xinput1_4
+    PROPERTIES
+    PREFIX ""
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/system32"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/system32"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/system32"
+)
+
