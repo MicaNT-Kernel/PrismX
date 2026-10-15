@@ -12,6 +12,22 @@ target_include_directories(prismx INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
+# Optional sibling Microsoft open-source DirectX repositories in C:/Users/admin/source
+foreach(_dx_inc
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectX-Headers/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectXMath/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectXMesh/DirectXMesh"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectXTex/DirectXTex"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectXTK12/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../D3D12TranslationLayer/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../D3D11On12/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../D3D9On12/include"
+)
+    if(EXISTS "${_dx_inc}")
+        target_include_directories(prismx INTERFACE "$<BUILD_INTERFACE:${_dx_inc}>")
+    endif()
+endforeach()
+
 # Compiler warnings and optimization flags
 if (MSVC)
     add_compile_options(/W4 /permissive- /O2 /utf-8)

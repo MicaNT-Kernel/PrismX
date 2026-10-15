@@ -2600,6 +2600,93 @@ int Test_PrismEffects_PostProcessing_And_EffectGraph() {
     return 0;
 }
 
+// ============================================================================
+// 18. Official Microsoft DirectX Open-Source Ecosystem & WDDM D3DKMT Funnel
+// ============================================================================
+int Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() {
+    PRISMX_TEST("Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel")
+
+    using namespace prismx;
+    using namespace prismx::ecosystem;
+
+    // 1. DirectX-Headers CD3DX12 Helpers & Prism3D12 Resource Creation
+    ID3D12Device* dev12 = nullptr;
+    PRISMX_ASSERT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_1, IID_ID3D12Device, reinterpret_cast<void**>(&dev12)) == 0);
+    PRISMX_ASSERT(dev12 != nullptr);
+
+    D3D12_COMMAND_QUEUE_DESC qDesc{};
+    qDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    ID3D12CommandQueue* queue12 = nullptr;
+    PRISMX_ASSERT(dev12->CreateCommandQueue(&qDesc, IID_ID3D12CommandQueue, reinterpret_cast<void**>(&queue12)) == 0);
+
+    CD3DX12_HEAP_PROPERTIES_HELPER heapProps(D3D12_HEAP_TYPE_DEFAULT);
+    D3D12_HEAP_PROPERTIES rawHeap{ heapProps.Type, 0, 0, 1, 1 };
+    D3D12_RESOURCE_DESC texDesc = CD3DX12_RESOURCE_DESC_HELPER::Tex2D(DXGI_FORMAT_B8G8R8A8_UNORM, 1280, 800, 1);
+    ID3D12Resource* rt12 = nullptr;
+    PRISMX_ASSERT(dev12->CreateCommittedResource(&rawHeap, D3D12_HEAP_FLAG_SHARED, &texDesc, D3D12_RESOURCE_STATE_PRESENT, nullptr, IID_ID3D12Resource, reinterpret_cast<void**>(&rt12)) == 0);
+
+    D3D12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER_HELPER::Transition(
+        rt12, D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET
+    );
+    PRISMX_ASSERT(barrier.Transition.StateAfter == D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    // 2. DirectXMesh::ComputeMeshlets & DirectXTex BC7 Block Compression
+    uint32_t cubeIndices[36] = {
+        0,1,2, 2,1,3, 4,5,6, 6,5,7, 0,4,1, 1,4,5,
+        2,3,6, 6,3,7, 0,2,4, 4,2,6, 1,5,3, 3,5,7
+    };
+    std::vector<DirectXMeshletHeader> meshlets;
+    std::vector<DirectXMeshletCullData> cullData;
+    PRISMX_ASSERT(SUCCEEDED(DirectXOpenSourceAssetPipeline::ComputeMeshlets(cubeIndices, 36, 8, 128, 126, meshlets, cullData)));
+    PRISMX_ASSERT(meshlets.size() == 1 && meshlets[0].PrimCount == 12);
+
+    std::vector<uint32_t> rgba16x16(16 * 16, 0xFF00E5FFu);
+    std::vector<DirectXTexBc7Block16B> bc7Blocks;
+    PRISMX_ASSERT(SUCCEEDED(DirectXOpenSourceAssetPipeline::CompressRgbaToBc7Unorm(rgba16x16.data(), 16, 16, bc7Blocks)));
+    PRISMX_ASSERT(bc7Blocks.size() == 16 && (bc7Blocks[0].LowBits & 0x40ULL) == 0x40ULL);
+
+    // 3. D3D12TranslationLayer & D3D11On12 Unified Funnel
+    ID3D11Device* dev11 = nullptr;
+    ID3D11DeviceContext* ctx11 = nullptr;
+    ID3D11On12Device* on12 = nullptr;
+    D3D_FEATURE_LEVEL chosenFl = D3D_FEATURE_LEVEL_11_0;
+    IUnknown* queues[1] = { queue12 };
+    PRISMX_ASSERT(SUCCEEDED(D3D11On12CreateDevice(dev12, 0, nullptr, 0, queues, 1, 0, &dev11, &ctx11, &chosenFl, &on12)));
+    PRISMX_ASSERT(dev11 != nullptr && ctx11 != nullptr && on12 != nullptr);
+
+    ID3D11Resource* wrapped11 = nullptr;
+    D3D11_RESOURCE_FLAGS_ON12 flags11{ D3D11_BIND_RENDER_TARGET, 0, 0, 0 };
+    PRISMX_ASSERT(SUCCEEDED(on12->CreateWrappedResource(rt12, &flags11, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT, IID_ID3D11Texture2D, reinterpret_cast<void**>(&wrapped11))));
+    PRISMX_ASSERT(wrapped11 != nullptr);
+    on12->AcquireWrappedResources(&wrapped11, 1);
+    on12->ReleaseWrappedResources(&wrapped11, 1);
+    PRISMX_ASSERT(on12->GetTranslatedCommandCount() == 3);
+
+    // 4. WDDM 3.2 D3DKMT Kernel-Mode Thunk & 540Hz DirectFlip Scanout
+    auto& kmt = PrismWddmKmtScanoutEngine::Get();
+    D3DKMT_CREATEDEVICE_THUNK kmtDev{};
+    PRISMX_ASSERT(SUCCEEDED(kmt.CreateKmtDevice(&kmtDev)) && kmtDev.hDevice != 0);
+
+    D3DKMT_ALLOCATE_VRAM_THUNK kmtVram{ kmtDev.hDevice, 1280ULL * 800ULL * 4ULL, 65536, 0, 0 };
+    PRISMX_ASSERT(SUCCEEDED(kmt.AllocateSharedVramSection(&kmtVram)) && kmtVram.SharedNtSectionHandle != 0);
+
+    D3DKMT_SUBMITCOMMAND_THUNK kmtSub{ kmtDev.hDevice, kmtDev.CommandBufferGpuVa, 4096, 42ULL };
+    D3DKMT_PRESENT_DIRECTFLIP_THUNK kmtPres{ kmtDev.hDevice, kmtVram.SharedNtSectionHandle, 1280, 800, 540, false, 0 };
+    PRISMX_ASSERT(SUCCEEDED(kmt.SubmitAndPresentDirectFlip(kmtSub, &kmtPres)));
+    PRISMX_ASSERT(kmtPres.DirectFlipMpoEngaged && kmtPres.ScanoutCenterPixelBGRA == 0xFF00E5FFu);
+
+    wrapped11->Release();
+    on12->Release();
+    ctx11->Release();
+    dev11->Release();
+    rt12->Release();
+    queue12->Release();
+    dev12->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2622,9 +2709,10 @@ int main() {
     if (Test_PrismVector_Font_Tessellation_Subsystem() != 0) return 1;
     if (Test_PrismCanvas2D_Vector_Renderer() != 0) return 1;
     if (Test_PrismEffects_PostProcessing_And_EffectGraph() != 0) return 1;
+    if (Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (17/17)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (18/18)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

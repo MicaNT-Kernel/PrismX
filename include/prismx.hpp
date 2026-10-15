@@ -31,3 +31,4 @@
 #include "prismx/vector_font.hpp"
 #include "prismx/canvas2d.hpp"
 #include "prismx/effects.hpp"
+#include "prismx/directx_ecosystem_bridge.hpp"
