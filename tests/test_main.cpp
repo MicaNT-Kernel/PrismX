@@ -2687,6 +2687,41 @@ int Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() {
     return 0;
 }
 
+int Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution() {
+    PRISMX_TEST("Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution")
+
+    // 1. DirectXShaderCompiler (dxcapi.h) Shader Model 6.8 Work Graphs + Mesh Shader + PIX Debug
+    const char* hlslSource = "[Shader(\"node\")][NodeLaunch(\"broadcasting\")][NumThreads(32,1,1)] void MainNode() {}";
+    DxcBuffer srcBuf{ hlslSource, std::strlen(hlslSource), 65001 };
+    DxcSm68CompileArtifact sm68{};
+    PRISMX_ASSERT(SUCCEEDED(PrismDxcCompiler3Engine::CompileHlslToDxilSm68(srcBuf, "MainNode", "lib_6_8", true, &sm68)));
+    PRISMX_ASSERT(sm68.Succeeded && sm68.DxilContainerMagic == 0x4C495844u);
+    PRISMX_ASSERT(sm68.ShaderModelMajor == 6 && sm68.ShaderModelMinor == 8);
+    PRISMX_ASSERT(sm68.WorkGraphsNodeShaderEnabled && sm68.PixDebugInstrumentationAttached);
+    PRISMX_ASSERT(sm68.DxilObjectBlob.size() == 256);
+
+    PixGpuScopedEventTracker pix{};
+    pix.BeginEvent(0xFF00E5FFULL, "PrismX::FramePass");
+    pix.SetMarker(0xFF00FF88ULL, "PrismX::GDeflateDecompress");
+    pix.EndEvent();
+    PRISMX_ASSERT(pix.ActiveBeginCount == 0 && pix.CompletedEventScopes == 1 && pix.MarkerCount == 1);
+
+    // 2. DirectStorage GDeflate::TileStreamHeader (exact 8-byte header + 32-way GPU Wave32 decompression)
+    gdeflate::GpuDecompressDispatchResult gdRes{};
+    PRISMX_ASSERT(SUCCEEDED(gdeflate::ExecuteGDeflateGpuComputeDecompression(1024ULL * 1024ULL, &gdRes)));
+    PRISMX_ASSERT(gdRes.HeaderValid && gdRes.TileCount == 16 && gdRes.UncompressedByteSize == 1048576ULL);
+    PRISMX_ASSERT(gdRes.Wave32ThreadGroupsDispatched == 16 && gdRes.DirectVramLandingVerified);
+
+    // 3. DirectML (DirectMLX.h DMLCalcBufferTensorSize + 1080p -> 4K SuperResolution Graph)
+    dml_ext::DirectMLSuperResolutionTelemetry srTel{};
+    PRISMX_ASSERT(SUCCEEDED(dml_ext::ExecuteDirectMLSuperResolutionPass(1920, 1080, &srTel)));
+    PRISMX_ASSERT(srTel.OutputWidth == 3840 && srTel.OutputHeight == 2160);
+    PRISMX_ASSERT(srTel.GraphNodeCount == 7 && srTel.CompiledOperatorDispatched);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -2710,9 +2745,10 @@ int main() {
     if (Test_PrismCanvas2D_Vector_Renderer() != 0) return 1;
     if (Test_PrismEffects_PostProcessing_And_EffectGraph() != 0) return 1;
     if (Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() != 0) return 1;
+    if (Test_PrismX_DXC_SM68_DirectStorage_GDeflate_And_DirectML_SuperResolution() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (18/18)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (19/19)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

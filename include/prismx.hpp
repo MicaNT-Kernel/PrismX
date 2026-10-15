@@ -32,3 +32,4 @@
 #include "prismx/canvas2d.hpp"
 #include "prismx/effects.hpp"
 #include "prismx/directx_ecosystem_bridge.hpp"
+#include "prismx/dxc_gdeflate_directml_bridge.hpp"

@@ -22,6 +22,9 @@ foreach(_dx_inc
     "${CMAKE_CURRENT_SOURCE_DIR}/../D3D12TranslationLayer/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../D3D11On12/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../D3D9On12/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectStorage/GDeflate/GDeflate"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectML/Libraries"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../DirectXShaderCompiler/include"
 )
     if(EXISTS "${_dx_inc}")
         target_include_directories(prismx INTERFACE "$<BUILD_INTERFACE:${_dx_inc}>")
