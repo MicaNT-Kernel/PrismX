@@ -4996,6 +4996,75 @@ int Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture")
+
+    using namespace prismx::D3D12ComAbi;
+
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Validate Options 26 Feature Query
+    D3D12_FEATURE_DATA_D3D12_OPTIONS26_ABI o26{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS26, &o26, sizeof(o26));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(o26.CpuTimelineQueryResolutionSupported == 1);
+    PRISMX_ASSERT(o26.PeriodicTrimNotificationsSupported == 1);
+    PRISMX_ASSERT(o26.ByteOffsetBufferViewsSupported == 1);
+    PRISMX_ASSERT(o26.RelaxedCastableFormatsSupported == 1);
+
+    // 2. Query and Validate ID3D12Device15
+    ID3D12Device15* pDev15 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device15, reinterpret_cast<void**>(&pDev15));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev15 != nullptr);
+
+    D3D12_QUERY_HEAP_DESC1 qDesc{};
+    qDesc.Type = D3D12_QUERY_HEAP_TYPE_OCCLUSION;
+    qDesc.Count = 4;
+    qDesc.NodeMask = 0;
+    qDesc.Flags = D3D12_QUERY_HEAP_FLAG_CPU_RESOLVE;
+
+    void* pHeap = nullptr;
+    hr = pDev15->CreateQueryHeap1(&qDesc, IID_ID3D12Device, &pHeap);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    uint64_t results[4]{};
+    hr = pDev15->ResolveQueryData(nullptr, D3D12_QUERY_TYPE_OCCLUSION, 0, 4, results, sizeof(results));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(results[0] != 0);
+
+    D3D12_REGISTER_TRIM_NOTIFICATION trimReg{};
+    trimReg.pfnCallback = [](void*, uint32_t) {};
+    trimReg.pContext = nullptr;
+    hr = pDev15->RegisterTrimNotificationCallback(&trimReg);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(trimReg.CallbackCookie != 0);
+
+    hr = pDev15->UnregisterTrimNotificationCallback(trimReg.CallbackCookie);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    pDev15->Release();
+
+    // 3. Query and Validate ID3D12Device16
+    ID3D12Device16* pDev16 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device16, reinterpret_cast<void**>(&pDev16));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev16 != nullptr);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE hDesc{ 0 };
+    hr = pDev16->TryCreateRenderTargetView(nullptr, nullptr, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    hr = pDev16->TryCreateDepthStencilView(nullptr, nullptr, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    hr = pDev16->TryCreateSamplerFeedbackUnorderedAccessView(nullptr, nullptr, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    pDev16->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -5059,9 +5128,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (57/57)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (58/58)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
