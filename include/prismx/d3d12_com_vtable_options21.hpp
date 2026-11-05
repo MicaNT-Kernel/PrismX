@@ -74,6 +74,7 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS12        = 41,
     D3D12_FEATURE_ABI_D3D12_OPTIONS13        = 43,
     D3D12_FEATURE_ABI_D3D12_OPTIONS14        = 44,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS15        = 45,
     D3D12_FEATURE_ABI_D3D12_OPTIONS16        = 49,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60
 };
@@ -149,6 +150,18 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS14_ABI {
     int32_t AdvancedTextureOpsSupported;
     int32_t WriteableMSAATexturesSupported;
     int32_t IndependentFrontAndBackStencilRefMaskSupported;
+};
+
+enum D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORT_ABI : uint32_t {
+    D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_NONE = 0,
+    D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_0xFFFF = 1,
+    D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_0xFFFFFFFF = 2,
+    D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_ALL = 3
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI {
+    int32_t TriangleFanSupported; // 1 (TRUE)
+    D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORT_ABI DynamicIndexBufferStripCut; // D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_ALL (3)
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI {
@@ -412,6 +425,13 @@ public:
                 o14->AdvancedTextureOpsSupported                     = 1;
                 o14->WriteableMSAATexturesSupported                  = 1;
                 o14->IndependentFrontAndBackStencilRefMaskSupported = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS15: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI)) return E_INVALIDARG;
+                auto* o15 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI*>(pData);
+                o15->TriangleFanSupported       = 1;
+                o15->DynamicIndexBufferStripCut = D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_ALL;
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {

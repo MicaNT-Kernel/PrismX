@@ -4385,6 +4385,57 @@ int Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. CheckFeatureSupport for Options 15
+    D3D12ComAbi::PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI opts15{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS15, &opts15, sizeof(opts15));
+    PRISMX_ASSERT(hr == S_OK);
+    PRISMX_ASSERT(opts15.TriangleFanSupported == 1);
+    PRISMX_ASSERT(opts15.DynamicIndexBufferStripCut == D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_ALL);
+
+    // 2. CommandList2 WriteBufferImmediate & QueryInterface
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    void* pvCmd2 = nullptr;
+    int32_t qiRes = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList2, &pvCmd2);
+    PRISMX_ASSERT(qiRes == 0);
+    PRISMX_ASSERT(pvCmd2 != nullptr);
+    auto* pCmd2 = static_cast<ID3D12GraphicsCommandList2*>(pvCmd2);
+
+    // Configure WriteBufferImmediate params
+    D3D12_WRITEBUFFERIMMEDIATE_PARAMETER params[2] = {
+        { 0x10008000ULL, 0x11223344u },
+        { 0x10008004ULL, 0x55667788u }
+    };
+    D3D12_WRITEBUFFERIMMEDIATE_MODE modes[2] = {
+        D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN,
+        D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT
+    };
+
+    pCmd2->WriteBufferImmediate(2, params, modes);
+    PRISMX_ASSERT(cmdList.GetWriteBufferImmediateCount() == 2);
+    const auto& recs = cmdList.GetRecordedWriteBufferImmediates();
+    PRISMX_ASSERT(recs.size() == 2);
+    PRISMX_ASSERT(recs[0].dest == 0x10008000ULL && recs[0].value == 0x11223344u && recs[0].mode == D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN);
+    PRISMX_ASSERT(recs[1].dest == 0x10008004ULL && recs[1].value == 0x55667788u && recs[1].mode == D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT);
+
+    // Default mode test
+    D3D12_WRITEBUFFERIMMEDIATE_PARAMETER defParam = { 0x20000000ULL, 0xCAFEBABE };
+    pCmd2->WriteBufferImmediate(1, &defParam, nullptr);
+    PRISMX_ASSERT(cmdList.GetWriteBufferImmediateCount() == 3);
+    PRISMX_ASSERT(cmdList.GetRecordedWriteBufferImmediates()[2].mode == D3D12_WRITEBUFFERIMMEDIATE_MODE_DEFAULT);
+
+    pCmd2->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4436,9 +4487,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_ShaderCacheSession_And_Device10_Agility() != 0) return 1;
     if (Test_PrismX_Official_D3D12_EnhancedBarriers_And_CommandList7() != 0) return 1;
     if (Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (46/46)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (47/47)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

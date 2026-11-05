@@ -25,6 +25,9 @@ namespace prismx {
 inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList1 =
     { 0x553103fb, 0x1e74, 0x4511, { 0xb0, 0xad, 0x73, 0x82, 0xc9, 0xf1, 0x57, 0xd6 } };
 
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList2 =
+    { 0x383ee830, 0x6768, 0x4d56, { 0x96, 0x37, 0x7a, 0xb1, 0x25, 0xf7, 0x70, 0x57 } };
+
 inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList7 =
     { 0x37a1f50b, 0x4861, 0x41dd, { 0x93, 0x3e, 0xf1, 0x4d, 0x86, 0xbf, 0xa2, 0x54 } };
 
@@ -47,10 +50,35 @@ public:
 };
 
 // ============================================================================
-// 3. ID3D12GraphicsCommandList7 (Enhanced Barriers)
+// 3. D3D12 WriteBufferImmediate & ID3D12GraphicsCommandList2
 // ============================================================================
 
-class ID3D12GraphicsCommandList7 : public ID3D12GraphicsCommandList1 {
+using D3D12_GPU_VIRTUAL_ADDRESS = uint64_t;
+
+enum D3D12_WRITEBUFFERIMMEDIATE_MODE : uint32_t {
+    D3D12_WRITEBUFFERIMMEDIATE_MODE_DEFAULT    = 0,
+    D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_IN  = 1,
+    D3D12_WRITEBUFFERIMMEDIATE_MODE_MARKER_OUT = 2
+};
+
+struct D3D12_WRITEBUFFERIMMEDIATE_PARAMETER {
+    D3D12_GPU_VIRTUAL_ADDRESS Dest;
+    uint32_t                  Value;
+};
+
+class ID3D12GraphicsCommandList2 : public ID3D12GraphicsCommandList1 {
+public:
+    virtual void WriteBufferImmediate(
+        uint32_t Count,
+        const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER* pParams,
+        const D3D12_WRITEBUFFERIMMEDIATE_MODE* pModes) = 0;
+};
+
+// ============================================================================
+// 4. ID3D12GraphicsCommandList7 (Enhanced Barriers)
+// ============================================================================
+
+class ID3D12GraphicsCommandList7 : public ID3D12GraphicsCommandList2 {
 public:
     virtual void Barrier(uint32_t NumBarrierGroups, const D3D12_BARRIER_GROUP* pBarrierGroups) = 0;
 };
@@ -81,6 +109,15 @@ private:
     std::vector<RecordedBarrierGroup> m_recordedBarriers;
 
 public:
+    struct WriteBufferImmediateRecord {
+        D3D12_GPU_VIRTUAL_ADDRESS dest;
+        uint32_t value;
+        D3D12_WRITEBUFFERIMMEDIATE_MODE mode;
+    };
+private:
+    std::vector<WriteBufferImmediateRecord> m_recordedWriteBufferImmediates;
+
+public:
     Prism3D12GraphicsCommandList7Impl(ID3D12Device* pDev, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator* pAlloc)
         : m_pDevice(pDev), m_pAllocator(pAlloc), m_type(type) {}
 
@@ -89,6 +126,7 @@ public:
         if (riid == IID_IUnknown || riid == IID_ID3D12Object || riid == IID_ID3D12DeviceChild ||
             riid == IID_ID3D12CommandList || riid == IID_ID3D12GraphicsCommandList ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList1 ||
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList2 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList7) {
             *ppv = static_cast<ID3D12GraphicsCommandList7*>(this);
             AddRef();
@@ -129,6 +167,7 @@ public:
         m_samplesPerPixel = 0;
         m_viewInstanceMask = 0;
         m_recordedBarriers.clear();
+        m_recordedWriteBufferImmediates.clear();
         m_isOpen = true;
         return 0;
     }
@@ -136,6 +175,7 @@ public:
     void ClearState(ID3D12PipelineState*) override {
         m_samplePositions.clear();
         m_recordedBarriers.clear();
+        m_recordedWriteBufferImmediates.clear();
     }
 
     void ResourceBarrier(uint32_t, const D3D12_RESOURCE_BARRIER*) override {}
@@ -168,6 +208,18 @@ public:
         m_viewInstanceMask = Mask;
     }
 
+    // ID3D12GraphicsCommandList2
+    void WriteBufferImmediate(
+        uint32_t Count,
+        const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER* pParams,
+        const D3D12_WRITEBUFFERIMMEDIATE_MODE* pModes) override {
+        if (!pParams || Count == 0) return;
+        for (uint32_t i = 0; i < Count; ++i) {
+            D3D12_WRITEBUFFERIMMEDIATE_MODE mode = pModes ? pModes[i] : D3D12_WRITEBUFFERIMMEDIATE_MODE_DEFAULT;
+            m_recordedWriteBufferImmediates.push_back({ pParams[i].Dest, pParams[i].Value, mode });
+        }
+    }
+
     // ID3D12GraphicsCommandList7
     void Barrier(uint32_t NumBarrierGroups, const D3D12_BARRIER_GROUP* pBarrierGroups) override {
         if (!pBarrierGroups) return;
@@ -193,6 +245,8 @@ public:
     uint32_t GetViewInstanceMask() const noexcept { return m_viewInstanceMask; }
     size_t GetRecordedBarrierGroupCount() const noexcept { return m_recordedBarriers.size(); }
     const RecordedBarrierGroup& GetRecordedBarrierGroup(size_t idx) const { return m_recordedBarriers[idx]; }
+    size_t GetWriteBufferImmediateCount() const noexcept { return m_recordedWriteBufferImmediates.size(); }
+    const std::vector<WriteBufferImmediateRecord>& GetRecordedWriteBufferImmediates() const noexcept { return m_recordedWriteBufferImmediates; }
 };
 
 } // namespace prismx
