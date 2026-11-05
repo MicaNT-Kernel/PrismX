@@ -2607,6 +2607,7 @@ int Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel() {
     PRISMX_TEST("Test_PrismX_MicrosoftDirectX_OpenSource_Ecosystem_And_D3DKMT_Funnel")
 
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::ecosystem;
 
     // 1. DirectX-Headers CD3DX12 Helpers & Prism3D12 Resource Creation
@@ -3398,6 +3399,7 @@ int Test_PrismX_System32_DirectX_DLL_Exports_And_CrossHierarchy_COM_Router() {
 int Test_PrismX_Official_D3D9Ex_21Slot_COM_VTable_And_D3D9On12_DLL() {
     PRISMX_TEST("Suite 34: Official Microsoft Direct3D 9 / 9Ex (d3d9.h / d3d9.dll) 21-Slot COM VTable & D3D9On12 Bridge")
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::D3D9Com;
     using namespace prismx::system32;
 
@@ -3483,6 +3485,7 @@ int Test_PrismX_Official_D3D9Ex_21Slot_COM_VTable_And_D3D9On12_DLL() {
 int Test_PrismX_Official_XAudio2_9_And_DirectInput8_COM_VTable_DLLs() {
     PRISMX_TEST("Suite 35: Official Microsoft XAudio2 2.9 (xaudio2_9.dll) & DirectInput8 (dinput8.dll) COM VTables")
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::XAudioDInputCom;
     using namespace prismx::system32;
 
@@ -3581,6 +3584,7 @@ int Test_PrismX_Official_XAudio2_9_And_DirectInput8_COM_VTable_DLLs() {
 int Test_PrismX_Official_D2D1_DWrite_DComp_COM_VTable_And_11_System32_DLL_Seal() {
     PRISMX_TEST("Suite 36: Official Microsoft D2D1 / DWrite / DComp COM ABI & 11-DLL System32 PE32+ Seal")
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::D2DWriteCompCom;
     using namespace prismx::system32;
 
@@ -3702,6 +3706,7 @@ int Test_PrismX_Official_D2D1_DWrite_DComp_COM_VTable_And_11_System32_DLL_Seal()
 int Test_PrismX_Official_MediaFoundation_MFPlat_MFReadWrite_DXGIDeviceManager_Cutscene_DLLs() {
     PRISMX_TEST("Suite 37: Official Microsoft Media Foundation (mfplat.dll & mfreadwrite.dll) Cutscene COM ABI")
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::MediaFoundationCom;
     using namespace prismx::system32;
 
@@ -3804,6 +3809,7 @@ int Test_PrismX_Official_MediaFoundation_MFPlat_MFReadWrite_DXGIDeviceManager_Cu
 int Test_PrismX_Official_DXCore_AdapterFactory1_COM_VTable_And_ML_Compute_DLL() {
     PRISMX_TEST("Suite 38: Official Microsoft DXCore (dxcore.dll) IDXCoreAdapterFactory1 COM VTable")
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::DXCoreComAbi;
     using namespace prismx::system32;
 
@@ -3880,6 +3886,7 @@ int Test_PrismX_Official_DXCore_AdapterFactory1_COM_VTable_And_ML_Compute_DLL() 
 int Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() {
     PRISMX_TEST("Suite 39: Official Khronos Vulkan 1.3 (vulkan-1.dll) & OpenGL 4.6 (opengl32.dll) + 16-DLL Seal")
     using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
     using namespace prismx::VulkanOpenGLSystem32;
     using namespace prismx::system32;
 
@@ -4082,6 +4089,209 @@ int Test_PrismX_Official_D3D10_1_DSound8_DDraw7_MF_And_20_System32_DLL_Seal() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_PipelineLibrary_And_CachedBlobs() {
+    PRISMX_TEST("Suite 42: Official Microsoft Direct3D 12 Agility SDK Pipeline Library & PRISMPL1 Serialization")
+
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Verify Pipeline Library Interfaces & IIDs
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12Device1.Data1 == 0x77db08b3);
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12PipelineLibrary.Data1 == 0xc6422831);
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12PipelineLibrary1.Data1 == 0x80e4a42a);
+
+    // 2. Initialize device and PipelineLibrary
+    ID3D12Device* dev = nullptr;
+    PRISMX_ASSERT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_ID3D12Device, reinterpret_cast<void**>(&dev)) == 0 && dev != nullptr);
+
+    auto* lib1 = new Prism3D12PipelineLibraryImpl(dev, nullptr, 0);
+
+    // Create mock pipeline state
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+    ID3D12PipelineState* pso1 = nullptr;
+    ID3D12PipelineState* pso2 = nullptr;
+    PRISMX_ASSERT(dev->CreateGraphicsPipelineState(&psoDesc, IID_ID3D12PipelineState, reinterpret_cast<void**>(&pso1)) == 0);
+    PRISMX_ASSERT(dev->CreateGraphicsPipelineState(&psoDesc, IID_ID3D12PipelineState, reinterpret_cast<void**>(&pso2)) == 0);
+
+    // 3. Store pipelines with unique names
+    PRISMX_ASSERT(lib1->StorePipeline(L"Warzone_UberShader_PSO", pso1) == 0);
+    PRISMX_ASSERT(lib1->StorePipeline(L"Cyberpunk_Raytrace_GBuffer_PSO", pso2) == 0);
+    PRISMX_ASSERT(lib1->StorePipeline(L"Warzone_UberShader_PSO", pso1) != 0); // duplicate rejected
+
+    // 4. Verify serialization to PRISMPL1 binary blob
+    size_t sz = lib1->GetSerializedSize();
+    PRISMX_ASSERT(sz > 8);
+    std::vector<uint8_t> blob(sz);
+    PRISMX_ASSERT(lib1->Serialize(blob.data(), sz) == 0);
+
+    uint32_t magic = *reinterpret_cast<uint32_t*>(blob.data());
+    uint32_t count = *reinterpret_cast<uint32_t*>(blob.data() + 4);
+    PRISMX_ASSERT(magic == 0x504C5031); // 'PRISMPL1'
+    PRISMX_ASSERT(count == 2);
+
+    // 5. Restore into new library from serialized blob
+    auto* lib2 = new Prism3D12PipelineLibraryImpl(dev, blob.data(), sz);
+    ID3D12PipelineState* restoredPso1 = nullptr;
+    ID3D12PipelineState* restoredPso2 = nullptr;
+    PRISMX_ASSERT(lib2->LoadGraphicsPipeline(L"Warzone_UberShader_PSO", &psoDesc, IID_ID3D12PipelineState, reinterpret_cast<void**>(&restoredPso1)) == 0);
+    PRISMX_ASSERT(restoredPso1 != nullptr);
+    PRISMX_ASSERT(lib2->LoadGraphicsPipeline(L"Cyberpunk_Raytrace_GBuffer_PSO", &psoDesc, IID_ID3D12PipelineState, reinterpret_cast<void**>(&restoredPso2)) == 0);
+    PRISMX_ASSERT(restoredPso2 != nullptr);
+
+    // Non-existent pipeline fails with error
+    ID3D12PipelineState* missingPso = nullptr;
+    PRISMX_ASSERT(lib2->LoadGraphicsPipeline(L"NonExistent_PSO", &psoDesc, IID_ID3D12PipelineState, reinterpret_cast<void**>(&missingPso)) < 0);
+
+    if (restoredPso1) restoredPso1->Release();
+    if (restoredPso2) restoredPso2->Release();
+    lib1->Release();
+    lib2->Release();
+    pso1->Release();
+    pso2->Release();
+    dev->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_Official_D3D12_SubAllocation_And_ResourceAllocationInfo1() {
+    PRISMX_TEST("Suite 43: Official Microsoft Direct3D 12 Sub-Allocation & Resource Allocation Info 1 (ID3D12Device4)")
+
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Verify Device4 IID
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12Device4.Data1 == 0x70e617dd);
+
+    // 2. Prepare resource descriptions for heterogeneous sub-allocations
+    D3D12_RESOURCE_DESC descs[3]{};
+
+    // Res 0: Vertex Buffer (1 MB)
+    descs[0].Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    descs[0].Alignment = 64 * 1024;
+    descs[0].Width = 1024 * 1024;
+    descs[0].Height = 1;
+    descs[0].DepthOrArraySize = 1;
+    descs[0].MipLevels = 1;
+    descs[0].SampleDesc.Count = 1;
+
+    // Res 1: Standard Texture 2D (1920x1080 RGBA8)
+    descs[1].Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    descs[1].Alignment = 64 * 1024;
+    descs[1].Width = 1920;
+    descs[1].Height = 1080;
+    descs[1].DepthOrArraySize = 1;
+    descs[1].MipLevels = 1;
+    descs[1].SampleDesc.Count = 1;
+
+    // Res 2: MSAA 4x Texture 2D (4 MB alignment)
+    descs[2].Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    descs[2].Alignment = 4 * 1024 * 1024;
+    descs[2].Width = 1920;
+    descs[2].Height = 1080;
+    descs[2].DepthOrArraySize = 1;
+    descs[2].MipLevels = 1;
+    descs[2].SampleDesc.Count = 4; // Multi-sampled
+
+    // 3. Compute Resource Allocation Info 1
+    D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo1[3]{};
+    auto totalInfo = CalculateResourceAllocationInfo1(0, 3, descs, allocInfo1);
+
+    // Verify sub-allocation offset alignments
+    PRISMX_ASSERT(allocInfo1[0].Offset == 0);
+    PRISMX_ASSERT(allocInfo1[0].Alignment == 64 * 1024);
+    PRISMX_ASSERT(allocInfo1[0].SizeInBytes == 1024 * 1024);
+
+    PRISMX_ASSERT((allocInfo1[1].Offset % (64 * 1024)) == 0);
+    PRISMX_ASSERT(allocInfo1[1].Alignment == 64 * 1024);
+
+    // MSAA texture must be aligned to 4 MB
+    PRISMX_ASSERT((allocInfo1[2].Offset % (4 * 1024 * 1024)) == 0);
+    PRISMX_ASSERT(allocInfo1[2].Alignment == 4 * 1024 * 1024);
+
+    PRISMX_ASSERT(totalInfo.Alignment == 4 * 1024 * 1024);
+    PRISMX_ASSERT(totalInfo.SizeInBytes >= allocInfo1[2].Offset + allocInfo1[2].SizeInBytes);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_Official_D3D12_ShaderCacheSession_And_Device10_Agility() {
+    PRISMX_TEST("Suite 44: Official Microsoft Direct3D 12 Shader Cache Sessions & Agility SDK 1.614+ Device10")
+
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Verify Device9, Device10, and ShaderCacheSession IIDs
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12Device9.Data1 == 0x56314f85);
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12Device10.Data1 == 0x517f8718);
+    PRISMX_ASSERT(OFFICIAL_IID_ID3D12ShaderCacheSession.Data1 == 0x2804f332);
+
+    // 2. Initialize device and ShaderCacheSession
+    ID3D12Device* dev = nullptr;
+    PRISMX_ASSERT(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_ID3D12Device, reinterpret_cast<void**>(&dev)) == 0);
+
+    D3D12_SHADER_CACHE_SESSION_DESC cacheDesc{};
+    cacheDesc.Mode = D3D12_SHADER_CACHE_MODE_DISK;
+    cacheDesc.Flags = D3D12_SHADER_CACHE_FLAG_DRIVER_MANAGED;
+    cacheDesc.MaximumInMemoryCacheSizeBytes = 64 * 1024 * 1024;
+    cacheDesc.MaximumInMemoryCacheEntries = 4096;
+
+    auto* session = new Prism3D12ShaderCacheSessionImpl(dev, cacheDesc);
+    PRISMX_ASSERT(session->GetDesc().Mode == D3D12_SHADER_CACHE_MODE_DISK);
+
+    // Store shader bytecode against key
+    const uint8_t shaderKey[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04 };
+    const uint8_t shaderBytecode[] = "DXBC_SM69_RAYTRACING_PAYLOAD_BYTECODE_COMPILED";
+    PRISMX_ASSERT(session->StoreValue(shaderKey, sizeof(shaderKey), shaderBytecode, sizeof(shaderBytecode)) == 0);
+
+    // Query value back
+    uint8_t fetchedBytecode[128]{};
+    uint32_t fetchedSize = sizeof(fetchedBytecode);
+    PRISMX_ASSERT(session->FindValue(shaderKey, sizeof(shaderKey), fetchedBytecode, &fetchedSize) == 0);
+    PRISMX_ASSERT(fetchedSize == sizeof(shaderBytecode));
+    PRISMX_ASSERT(std::memcmp(fetchedBytecode, shaderBytecode, sizeof(shaderBytecode)) == 0);
+
+    // 3. Test Agility SDK 1.614+ Extended Structures
+    D3D12_RESOURCE_DESC1 resDesc1{};
+    resDesc1.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    resDesc1.Width = 3840;
+    resDesc1.Height = 2160;
+    resDesc1.DepthOrArraySize = 1;
+    resDesc1.MipLevels = 1;
+    resDesc1.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    resDesc1.SamplerFeedbackMipRegion.Width = 16;
+    resDesc1.SamplerFeedbackMipRegion.Height = 16;
+    resDesc1.SamplerFeedbackMipRegion.Depth = 1;
+    PRISMX_ASSERT(resDesc1.SamplerFeedbackMipRegion.Width == 16);
+
+    // 4. Test Render Pass Access Structures
+    D3D12_RENDER_PASS_RENDER_TARGET_DESC rtPassDesc{};
+    rtPassDesc.BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
+    rtPassDesc.BeginningAccess.Clear.Color[0] = 0.1f;
+    rtPassDesc.EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
+    PRISMX_ASSERT(rtPassDesc.BeginningAccess.Type == D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR);
+    PRISMX_ASSERT(rtPassDesc.EndingAccess.Type == D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE);
+
+    // 5. Test Canonical VTable QueryInterface across all generations
+    D3D12ComAbi::PrismD3D12Device14CanonicalImpl canonicalDev;
+    void* pOut = nullptr;
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device1, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device4, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device5, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device8, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device9, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device10, &pOut) == S_OK && pOut != nullptr);
+    PRISMX_ASSERT(canonicalDev.QueryInterface(OFFICIAL_IID_ID3D12Device14, &pOut) == S_OK && pOut != nullptr);
+
+    session->Release();
+    dev->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4128,9 +4338,12 @@ int main() {
     if (Test_PrismX_Official_Vulkan1_OpenGL32_Loader_And_16_System32_DLL_Seal() != 0) return 1;
     if (Test_PrismX_Official_Win32_HWND_Event_And_DWM_IndependentFlip_Interop() != 0) return 1;
     if (Test_PrismX_Official_D3D10_1_DSound8_DDraw7_MF_And_20_System32_DLL_Seal() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_PipelineLibrary_And_CachedBlobs() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_SubAllocation_And_ResourceAllocationInfo1() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_ShaderCacheSession_And_Device10_Agility() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (41/41)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (44/44)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
