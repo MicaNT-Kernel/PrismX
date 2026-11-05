@@ -53,6 +53,10 @@ inline constexpr IID IID_ID3D12GraphicsCommandList4 = {
     0x87e0e307, 0x81c0, 0x4c99, { 0xaf, 0xc5, 0x65, 0x76, 0x43, 0x2d, 0x95, 0xe9 }
 };
 
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList4 = {
+    0x8754318e, 0xd3a9, 0x4541, { 0x98, 0xcf, 0x64, 0x5b, 0x50, 0xdc, 0x48, 0x74 }
+};
+
 inline constexpr IID IID_ID3D12GraphicsCommandList6 = {
     0xc3827890, 0xe548, 0x4cfa, { 0x81, 0x4f, 0x4a, 0x0f, 0x0f, 0x07, 0x4e, 0x54 }
 };
@@ -459,6 +463,7 @@ private:
     // Telemetry & metrics
     uint32_t m_blasBuilds{ 0 };
     uint32_t m_tlasBuilds{ 0 };
+    uint32_t m_asCopies{ 0 };
     uint32_t m_raysDispatched{ 0 };
     uint32_t m_raysHit{ 0 };
     uint32_t m_meshDispatches{ 0 };
@@ -491,6 +496,7 @@ public:
             riid == IID_ID3D12CommandList ||
             riid == IID_ID3D12GraphicsCommandList ||
             riid == IID_ID3D12GraphicsCommandList4 ||
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList4 ||
             riid == IID_ID3D12GraphicsCommandList6) {
             *ppv = static_cast<ID3D12GraphicsCommandList6*>(this);
             AddRef();
@@ -568,7 +574,12 @@ public:
         uint32_t,
         const uint64_t*) override {}
 
-    void CopyRaytracingAccelerationStructure(uint64_t, uint64_t, uint32_t) override {}
+    void CopyRaytracingAccelerationStructure(uint64_t dest, uint64_t src, uint32_t mode) override {
+        (void)dest;
+        (void)src;
+        (void)mode;
+        m_asCopies++;
+    }
 
     void SetPipelineState1(ID3D12StateObject* pStateObject) override {
         if (m_pStateObject) m_pStateObject->Release();
@@ -607,10 +618,21 @@ public:
 
     uint32_t getBlasBuilds() const { return m_blasBuilds; }
     uint32_t getTlasBuilds() const { return m_tlasBuilds; }
+    uint32_t getAsCopies() const { return m_asCopies; }
+    ID3D12StateObject* getStateObject() const { return m_pStateObject; }
     uint32_t getRaysDispatched() const { return m_raysDispatched; }
     uint32_t getRaysHit() const { return m_raysHit; }
     uint32_t getMeshDispatches() const { return m_meshDispatches; }
     uint32_t getMeshAmplifiedPrimitives() const { return m_meshAmplifiedPrimitives; }
+    void resetRaytracingStats() {
+        m_asCopies = 0;
+        m_tlasBuilds = 0;
+        m_blasBuilds = 0;
+        if (m_pStateObject) {
+            m_pStateObject->Release();
+            m_pStateObject = nullptr;
+        }
+    }
 };
 
 class Prism3D12Device5Impl : public ID3D12Device5 {

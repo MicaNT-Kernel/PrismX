@@ -13,7 +13,7 @@
 #include <cmath>
 
 #define PRISMX_TEST(name) \
-    std::cout << " [RUN]  " << name << " ... "; \
+    std::cout << " [RUN]  " << name << " ... " << std::flush; \
     try {
 
 #define PRISMX_PASS() \
@@ -4519,7 +4519,79 @@ int Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource() {
     return 0;
 }
 
+// ----------------------------------------------------------------------------
+// Suite 50: Official Direct3D 12 ID3D12GraphicsCommandList4 & Options 18/19
+// ----------------------------------------------------------------------------
+int Test_PrismX_Official_D3D12_CommandList4_And_Options18_19() {
+    PRISMX_TEST("PrismX Official Direct3D 12 ID3D12GraphicsCommandList4 & Options 18/19 ABI");
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. CheckFeatureSupport for Options 18
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS18_ABI opts18{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS18, &opts18, sizeof(opts18));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts18.RenderPassesTier == 2u);
+    PRISMX_ASSERT(opts18.AdvancedBlendOpsSupported == 1);
+    PRISMX_ASSERT(opts18.RenderPassesValid == 1);
+
+    // 2. CheckFeatureSupport for Options 19
+    D3D12_FEATURE_DATA_D3D12_OPTIONS19_ABI opts19{};
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS19, &opts19, sizeof(opts19));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts19.MipLevelOffsetsSupported == 1);
+    PRISMX_ASSERT(opts19.HalfFloatPrecisionSupported == 1);
+    PRISMX_ASSERT(opts19.MismatchingOutputDimensionsSupported == 1);
+    PRISMX_ASSERT(opts19.SupportedSampleCountsWithNoOutputs == 1u);
+    PRISMX_ASSERT(opts19.PointSamplingAddressesNeverRoundUp == 1);
+    PRISMX_ASSERT(opts19.RasterizerDesc2Supported == 1);
+    PRISMX_ASSERT(opts19.NarrowQuadrilateralLinesSupported == 1);
+    PRISMX_ASSERT(opts19.AnisoFilterWithPointMipSupported == 1);
+    PRISMX_ASSERT(opts19.MaxSamplerDescriptorHeapSize == 2048u);
+    PRISMX_ASSERT(opts19.MaxSamplerDescriptorHeapSizeWithStaticSamplers == 2048u);
+    PRISMX_ASSERT(opts19.MaxViewDescriptorHeapSize == 1000000u);
+    PRISMX_ASSERT(opts19.ComputeOnlyCustomHeapSupported == 1);
+
+    // 3. QueryInterface for ID3D12GraphicsCommandList4
+    Prism3D12GraphicsCommandListRaytracingImpl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, nullptr);
+    ID3D12GraphicsCommandList4* pCmdList4 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList4, reinterpret_cast<void**>(&pCmdList4));
+    PRISMX_ASSERT(SUCCEEDED(hr) && pCmdList4 != nullptr);
+
+    // 4. Test BuildRaytracingAccelerationStructure
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildDesc{};
+    buildDesc.DestAccelerationStructureData = 0x100000;
+    buildDesc.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+    buildDesc.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    pCmdList4->BuildRaytracingAccelerationStructure(&buildDesc, 0, nullptr);
+    PRISMX_ASSERT(cmdList.getTlasBuilds() == 1);
+
+    // 5. Test CopyRaytracingAccelerationStructure
+    pCmdList4->CopyRaytracingAccelerationStructure(0x200000, 0x100000, 1);
+    PRISMX_ASSERT(cmdList.getAsCopies() == 1);
+
+    // 6. Test SetPipelineState1
+    // 6. Test SetPipelineState1
+    auto* so = new Prism3D12StateObjectImpl(nullptr);
+    pCmdList4->SetPipelineState1(so);
+    PRISMX_ASSERT(cmdList.getStateObject() == so);
+    so->Release();
+
+    // 7. Test Reset clears raytracing counters
+    cmdList.resetRaytracingStats();
+    PRISMX_ASSERT(cmdList.getTlasBuilds() == 0);
+    PRISMX_ASSERT(cmdList.getAsCopies() == 0);
+    PRISMX_ASSERT(cmdList.getStateObject() == nullptr);
+
+    pCmdList4->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
+    try {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
     std::cout << "========================================================\n";
@@ -4573,10 +4645,15 @@ int main() {
     if (Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15() != 0) return 1;
     if (Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList4_And_Options18_19() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (49/49)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (50/50)    \n";
     std::cout << "========================================================\n";
     return 0;
+    } catch (const std::exception& e) {
+        std::cout << "\n[TEST FAILED WITH EXCEPTION]: " << e.what() << "\n";
+        return 1;
+    }
 }
 

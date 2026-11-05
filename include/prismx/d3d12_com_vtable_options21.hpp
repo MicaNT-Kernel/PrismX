@@ -80,6 +80,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS15        = 45,
     D3D12_FEATURE_ABI_D3D12_OPTIONS16        = 49,
     D3D12_FEATURE_ABI_D3D12_OPTIONS17        = 50,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS18        = 51,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS19        = 52,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60
 };
 
@@ -234,6 +236,27 @@ public:
 
     const std::vector<TrackedWriteRange>& GetTrackedWrites() const { return m_trackedWrites; }
     void ClearTrackedWrites() { m_trackedWrites.clear(); }
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS18_ABI {
+    uint32_t RenderPassesTier;
+    int32_t  AdvancedBlendOpsSupported;
+    int32_t  RenderPassesValid;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS19_ABI {
+    int32_t  MipLevelOffsetsSupported;
+    int32_t  HalfFloatPrecisionSupported;
+    int32_t  MismatchingOutputDimensionsSupported;
+    uint32_t SupportedSampleCountsWithNoOutputs;
+    int32_t  PointSamplingAddressesNeverRoundUp;
+    int32_t  RasterizerDesc2Supported;
+    int32_t  NarrowQuadrilateralLinesSupported;
+    int32_t  AnisoFilterWithPointMipSupported;
+    uint32_t MaxSamplerDescriptorHeapSize;
+    uint32_t MaxSamplerDescriptorHeapSizeWithStaticSamplers;
+    uint32_t MaxViewDescriptorHeapSize;
+    int32_t  ComputeOnlyCustomHeapSupported;
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI {
@@ -514,6 +537,31 @@ public:
                 o17->NonNormalizedCoordinateSamplersSupported = 1;
                 o17->ManualWriteTrackingResourceSupported     = 1;
                 o17->InvertedDepthRangesSupported             = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS18: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS18_ABI)) return E_INVALIDARG;
+                auto* o18 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS18_ABI*>(pData);
+                o18->RenderPassesTier          = 2u;
+                o18->AdvancedBlendOpsSupported = 1;
+                o18->RenderPassesValid         = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS19: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS19_ABI)) return E_INVALIDARG;
+                auto* o19 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS19_ABI*>(pData);
+                o19->MipLevelOffsetsSupported                      = 1;
+                o19->HalfFloatPrecisionSupported                   = 1;
+                o19->MismatchingOutputDimensionsSupported          = 1;
+                o19->SupportedSampleCountsWithNoOutputs            = 1u;
+                o19->PointSamplingAddressesNeverRoundUp            = 1;
+                o19->RasterizerDesc2Supported                      = 1;
+                o19->NarrowQuadrilateralLinesSupported             = 1;
+                o19->AnisoFilterWithPointMipSupported              = 1;
+                o19->MaxSamplerDescriptorHeapSize                  = 2048u;
+                o19->MaxSamplerDescriptorHeapSizeWithStaticSamplers = 2048u;
+                o19->MaxViewDescriptorHeapSize                     = 1000000u;
+                o19->ComputeOnlyCustomHeapSupported                = 1;
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS21: {
