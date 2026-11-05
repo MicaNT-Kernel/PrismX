@@ -4475,6 +4475,50 @@ int Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. CheckFeatureSupport for Options 17
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS17_ABI opts17{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS17, &opts17, sizeof(opts17));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts17.NonNormalizedCoordinateSamplersSupported == 1);
+    PRISMX_ASSERT(opts17.ManualWriteTrackingResourceSupported == 1);
+    PRISMX_ASSERT(opts17.InvertedDepthRangesSupported == 1);
+
+    // 2. Instantiate and QueryInterface ID3D12ManualWriteTrackingResource
+    Prism3D12ManualWriteTrackingResourceImpl res;
+    ID3D12ManualWriteTrackingResource* pTrack = nullptr;
+    hr = res.QueryInterface(OFFICIAL_IID_ID3D12ManualWriteTrackingResource, reinterpret_cast<void**>(&pTrack));
+    PRISMX_ASSERT(SUCCEEDED(hr) && pTrack != nullptr);
+
+    // 3. TrackWrite with specified range
+    D3D12_RANGE range1{ 0x1000, 0x2000 };
+    pTrack->TrackWrite(0, &range1);
+    PRISMX_ASSERT(res.GetTrackedWrites().size() == 1);
+    PRISMX_ASSERT(res.GetTrackedWrites()[0].Subresource == 0);
+    PRISMX_ASSERT(res.GetTrackedWrites()[0].Begin == 0x1000);
+    PRISMX_ASSERT(res.GetTrackedWrites()[0].End == 0x2000);
+
+    // 4. TrackWrite with nullptr range (entire subresource)
+    pTrack->TrackWrite(1, nullptr);
+    PRISMX_ASSERT(res.GetTrackedWrites().size() == 2);
+    PRISMX_ASSERT(res.GetTrackedWrites()[1].Subresource == 1);
+    PRISMX_ASSERT(res.GetTrackedWrites()[1].Begin == 0);
+    PRISMX_ASSERT(res.GetTrackedWrites()[1].End == 0xFFFFFFFF);
+
+    // 5. ClearTrackedWrites
+    res.ClearTrackedWrites();
+    PRISMX_ASSERT(res.GetTrackedWrites().empty());
+
+    pTrack->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4528,9 +4572,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14() != 0) return 1;
     if (Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15() != 0) return 1;
     if (Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (48/48)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (49/49)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

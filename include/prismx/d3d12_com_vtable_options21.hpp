@@ -55,6 +55,9 @@ inline constexpr IID OFFICIAL_CLSID_D3D12DeviceFactory =
 inline constexpr IID OFFICIAL_IID_ID3D12SDKConfiguration =
     { 0xe9eb5314, 0x33aa, 0x42b2, { 0xa7, 0x18, 0xd7, 0x7f, 0x58, 0xb1, 0xf1, 0xc7 } };
 
+inline constexpr IID OFFICIAL_IID_ID3D12ManualWriteTrackingResource =
+    { 0x86ca3b85, 0x49ad, 0x4b6e, { 0xae, 0xd5, 0xed, 0xdb, 0x18, 0x54, 0x0f, 0x41 } };
+
 // ============================================================================
 // 2. Official D3D12_FEATURE Enum & CheckFeatureSupport Data Structures
 // ============================================================================
@@ -76,6 +79,7 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS14        = 44,
     D3D12_FEATURE_ABI_D3D12_OPTIONS15        = 45,
     D3D12_FEATURE_ABI_D3D12_OPTIONS16        = 49,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS17        = 50,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60
 };
 
@@ -167,6 +171,69 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI {
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI {
     int32_t DynamicDepthBiasSupported; // 1 (TRUE)
     int32_t GPUUploadHeapSupported;    // 1 (TRUE - 16 GB ReBAR)
+};
+
+struct D3D12_RANGE {
+    size_t Begin;
+    size_t End;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS17_ABI {
+    int32_t NonNormalizedCoordinateSamplersSupported; // 1 (TRUE)
+    int32_t ManualWriteTrackingResourceSupported;     // 1 (TRUE)
+    int32_t InvertedDepthRangesSupported;             // 1 (TRUE)
+};
+
+struct ID3D12ManualWriteTrackingResource : public prismx::IUnknown {
+    virtual void TrackWrite(
+        uint32_t Subresource,
+        const D3D12_RANGE* pWrittenRange) = 0;
+};
+
+class Prism3D12ManualWriteTrackingResourceImpl : public ID3D12ManualWriteTrackingResource {
+public:
+    struct TrackedWriteRange {
+        uint32_t Subresource;
+        size_t Begin;
+        size_t End;
+    };
+private:
+    std::atomic<uint32_t> m_refCount{ 1 };
+    std::vector<TrackedWriteRange> m_trackedWrites;
+public:
+    int32_t QueryInterface(const IID& riid, void** ppv) override {
+        if (!ppv) return -1;
+        if (riid == OFFICIAL_IID_ID3D12ManualWriteTrackingResource || riid == IID_IUnknown) {
+            *ppv = static_cast<ID3D12ManualWriteTrackingResource*>(this);
+            AddRef();
+            return 0;
+        }
+        *ppv = nullptr;
+        return -2147467262;
+    }
+
+    uint32_t AddRef() override { return ++m_refCount; }
+    uint32_t Release() override {
+        uint32_t c = --m_refCount;
+        if (c == 0) delete this;
+        return c;
+    }
+
+    void TrackWrite(uint32_t Subresource, const D3D12_RANGE* pWrittenRange) override {
+        TrackedWriteRange tr{};
+        tr.Subresource = Subresource;
+        if (pWrittenRange) {
+            tr.Begin = pWrittenRange->Begin;
+            tr.End   = pWrittenRange->End;
+        } else {
+            tr.Begin = 0;
+            tr.End   = 0xFFFFFFFF;
+        }
+        m_trackedWrites.push_back(tr);
+    }
+
+    const std::vector<TrackedWriteRange>& GetTrackedWrites() const { return m_trackedWrites; }
+    void ClearTrackedWrites() { m_trackedWrites.clear(); }
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI {
@@ -439,6 +506,14 @@ public:
                 auto* o16 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI*>(pData);
                 o16->DynamicDepthBiasSupported = 1;
                 o16->GPUUploadHeapSupported    = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS17: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS17_ABI)) return E_INVALIDARG;
+                auto* o17 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS17_ABI*>(pData);
+                o17->NonNormalizedCoordinateSamplersSupported = 1;
+                o17->ManualWriteTrackingResourceSupported     = 1;
+                o17->InvertedDepthRangesSupported             = 1;
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS21: {
