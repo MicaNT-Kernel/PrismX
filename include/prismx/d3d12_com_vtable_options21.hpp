@@ -35,6 +35,10 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device9 =
     { 0x56314f85, 0xef42, 0x4858, { 0xb9, 0x93, 0x76, 0x3d, 0x5a, 0x33, 0x22, 0x18 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device10 =
     { 0x517f8718, 0xaa66, 0x49f9, { 0xb0, 0x2b, 0xa7, 0xab, 0x89, 0xc0, 0x60, 0x31 } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device11 =
+    { 0x5405c344, 0xd457, 0x444e, { 0xb4, 0xdd, 0x23, 0x66, 0xe4, 0x5a, 0xee, 0x39 } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device12 =
+    { 0x5af5c532, 0x4c91, 0x4cd0, { 0xb5, 0x41, 0x15, 0xa4, 0x05, 0x39, 0x5f, 0xc5 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device14 =
     { 0x53176779, 0x6099, 0x401c, { 0xa3, 0x70, 0x06, 0x73, 0x08, 0x54, 0x3d, 0x8b } };
 
@@ -86,7 +90,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60,
     D3D12_FEATURE_ABI_D3D12_OPTIONS22        = 61,
     D3D12_FEATURE_ABI_D3D12_OPTIONS23        = 62,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS24        = 63
+    D3D12_FEATURE_ABI_D3D12_OPTIONS24        = 63,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS25        = 64
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -292,6 +297,13 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS24_ABI {
     int32_t  SubobjectCreationSupported;
 };
 
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS25_ABI {
+    uint32_t Max1DDispatchSize;
+    uint32_t Max1DDispatchMeshSize;
+    int32_t  WaveMatrixSupported;
+    int32_t  CooperativeVectorsSupported;
+};
+
 // ============================================================================
 // 3. Exact 44-Slot Microsoft ID3D12Device COM Interface VTable
 // ============================================================================
@@ -381,7 +393,75 @@ public:
     virtual LUID GetAdapterLuid() = 0;
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12DeviceCanonicalVTable {
+enum D3D12_FILTER : uint32_t {
+    D3D12_FILTER_MIN_MAG_MIP_POINT                          = 0,
+    D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR                  = 0x1,
+    D3D12_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT            = 0x4,
+    D3D12_FILTER_MIN_POINT_MAG_MIP_LINEAR                  = 0x5,
+    D3D12_FILTER_MIN_LINEAR_MAG_MIP_POINT                  = 0x10,
+    D3D12_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR          = 0x11,
+    D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT                  = 0x14,
+    D3D12_FILTER_MIN_MAG_MIP_LINEAR                        = 0x15,
+    D3D12_FILTER_ANISOTROPIC                               = 0x55,
+    D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT              = 0x80,
+    D3D12_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR       = 0x81,
+    D3D12_FILTER_COMPARISON_MIN_POINT_MAG_LINEAR_MIP_POINT = 0x84,
+    D3D12_FILTER_COMPARISON_MIN_POINT_MAG_MIP_LINEAR       = 0x85,
+    D3D12_FILTER_COMPARISON_MIN_LINEAR_MAG_MIP_POINT       = 0x90,
+    D3D12_FILTER_COMPARISON_MIN_LINEAR_MAG_POINT_MIP_LINEAR = 0x91,
+    D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT       = 0x94,
+    D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR             = 0x95,
+    D3D12_FILTER_COMPARISON_ANISOTROPIC                    = 0xd5
+};
+
+enum D3D12_TEXTURE_ADDRESS_MODE : uint32_t {
+    D3D12_TEXTURE_ADDRESS_MODE_WRAP        = 1,
+    D3D12_TEXTURE_ADDRESS_MODE_MIRROR      = 2,
+    D3D12_TEXTURE_ADDRESS_MODE_CLAMP       = 3,
+    D3D12_TEXTURE_ADDRESS_MODE_BORDER      = 4,
+    D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE = 5
+};
+
+enum D3D12_COMPARISON_FUNC : uint32_t {
+    D3D12_COMPARISON_FUNC_NEVER         = 1,
+    D3D12_COMPARISON_FUNC_LESS          = 2,
+    D3D12_COMPARISON_FUNC_EQUAL         = 3,
+    D3D12_COMPARISON_FUNC_LESS_EQUAL    = 4,
+    D3D12_COMPARISON_FUNC_GREATER       = 5,
+    D3D12_COMPARISON_FUNC_NOT_EQUAL     = 6,
+    D3D12_COMPARISON_FUNC_GREATER_EQUAL = 7,
+    D3D12_COMPARISON_FUNC_ALWAYS        = 8
+};
+
+enum D3D12_SAMPLER_FLAGS {
+    D3D12_SAMPLER_FLAG_NONE                       = 0,
+    D3D12_SAMPLER_FLAG_UINT_BORDER_COLOR          = 0x1,
+    D3D12_SAMPLER_FLAG_NON_NORMALIZED_COORDINATES = 0x2
+};
+
+struct D3D12_SAMPLER_DESC2 {
+    D3D12_FILTER               Filter;
+    D3D12_TEXTURE_ADDRESS_MODE AddressU;
+    D3D12_TEXTURE_ADDRESS_MODE AddressV;
+    D3D12_TEXTURE_ADDRESS_MODE AddressW;
+    float                      MipLODBias;
+    uint32_t                   MaxAnisotropy;
+    D3D12_COMPARISON_FUNC      ComparisonFunc;
+    union {
+        float                  FloatBorderColor[4];
+        uint32_t               UintBorderColor[4];
+    };
+    float                      MinLOD;
+    float                      MaxLOD;
+    D3D12_SAMPLER_FLAGS        Flags;
+};
+
+class ID3D12Device11 : public ID3D12DeviceCanonicalVTable {
+public:
+    virtual void CreateSampler2(const D3D12_SAMPLER_DESC2* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
+};
+
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device11 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -403,8 +483,10 @@ public:
             riid == OFFICIAL_IID_ID3D12Device8 ||
             riid == OFFICIAL_IID_ID3D12Device9 ||
             riid == OFFICIAL_IID_ID3D12Device10 ||
+            riid == OFFICIAL_IID_ID3D12Device11 ||
+            riid == OFFICIAL_IID_ID3D12Device12 ||
             riid == OFFICIAL_IID_ID3D12Device14) {
-            *ppv = static_cast<ID3D12DeviceCanonicalVTable*>(this);
+            *ppv = static_cast<ID3D12Device11*>(this);
             AddRef();
             return S_OK;
         }
@@ -629,6 +711,15 @@ public:
                 o24->SubobjectCreationSupported = 1;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS25: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS25_ABI)) return E_INVALIDARG;
+                auto* o25 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS25_ABI*>(pData);
+                o25->Max1DDispatchSize           = 1073741824u; // 1G dispatches
+                o25->Max1DDispatchMeshSize       = 4194303u;    // D3D12_MS_DISPATCH_MAX_THREAD_GROUPS_PER_GRID
+                o25->WaveMatrixSupported         = 1;
+                o25->CooperativeVectorsSupported = 1;
+                return S_OK;
+            }
             default:
                 std::memset(pData, 0, Size);
                 return S_OK;
@@ -652,6 +743,7 @@ public:
         m_innerDevice->CreateDepthStencilView(pRes, pDesc, h);
     }
     void CreateSampler(const void*, D3D12_CPU_DESCRIPTOR_HANDLE) override {}
+    void CreateSampler2(const D3D12_SAMPLER_DESC2*, D3D12_CPU_DESCRIPTOR_HANDLE) override {}
     void CopyDescriptors(uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
     void CopyDescriptorsSimple(uint32_t, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
     D3D12_RESOURCE_ALLOCATION_INFO_ABI GetResourceAllocationInfo(uint32_t, uint32_t, const D3D12_RESOURCE_DESC* pDesc) override {

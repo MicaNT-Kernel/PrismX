@@ -4873,6 +4873,60 @@ int Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Check Feature Support: Options 25 (Increased 1D Dispatch & Cooperative Vectors)
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS25_ABI opt25{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS25, &opt25, sizeof(opt25));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opt25.Max1DDispatchSize == 1073741824u);
+    PRISMX_ASSERT(opt25.Max1DDispatchMeshSize == 4194303u);
+    PRISMX_ASSERT(opt25.WaveMatrixSupported == 1);
+    PRISMX_ASSERT(opt25.CooperativeVectorsSupported == 1);
+
+    // 2. Query ID3D12Device11
+    ID3D12Device11* pDev11 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device11, reinterpret_cast<void**>(&pDev11));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev11 != nullptr);
+
+    // 3. Query ID3D12Device12
+    ID3D12Device11* pDev12 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device12, reinterpret_cast<void**>(&pDev12));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev12 != nullptr);
+    pDev12->Release();
+
+    // 4. CreateSampler2 with UintBorderColor and extended sampler flags
+    D3D12_SAMPLER_DESC2 sDesc{};
+    sDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    sDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sDesc.MipLODBias = 0.0f;
+    sDesc.MaxAnisotropy = 1;
+    sDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+    sDesc.UintBorderColor[0] = 255;
+    sDesc.UintBorderColor[1] = 0;
+    sDesc.UintBorderColor[2] = 128;
+    sDesc.UintBorderColor[3] = 255;
+    sDesc.MinLOD = 0.0f;
+    sDesc.MaxLOD = 16.0f;
+    sDesc.Flags = D3D12_SAMPLER_FLAG_UINT_BORDER_COLOR;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE destDesc{ 0x1000 };
+    pDev11->CreateSampler2(&sDesc, destDesc);
+
+    pDev11->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4934,9 +4988,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_CommandList7_And_Options22() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList8_9_And_Options23() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (55/55)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (56/56)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
