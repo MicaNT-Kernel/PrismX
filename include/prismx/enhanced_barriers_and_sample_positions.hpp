@@ -120,10 +120,43 @@ public:
 };
 
 // ============================================================================
+// 6. ID3D12GraphicsCommandList8 (Front & Back Stencil Reference)
+// ============================================================================
+
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList8 =
+    { 0xee936ef9, 0x599d, 0x4d28, { 0x93, 0x8e, 0x23, 0xc4, 0xad, 0x05, 0xce, 0x51 } };
+inline constexpr IID IID_ID3D12GraphicsCommandList8 = OFFICIAL_IID_ID3D12GraphicsCommandList8;
+
+class ID3D12GraphicsCommandList8 : public ID3D12GraphicsCommandList7 {
+public:
+    virtual void OMSetFrontAndBackStencilRef(uint32_t FrontStencilRef, uint32_t BackStencilRef) = 0;
+};
+
+// ============================================================================
+// 7. ID3D12GraphicsCommandList9 (Dynamic Depth Bias & Strip Cut)
+// ============================================================================
+
+enum D3D12_INDEX_BUFFER_STRIP_CUT_VALUE : uint32_t {
+    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED   = 0,
+    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF     = 1,
+    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF = 2
+};
+
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList9 =
+    { 0x34ed2808, 0xffe6, 0x4c2b, { 0xb1, 0x1a, 0xca, 0xbd, 0x2b, 0x0c, 0x59, 0xe1 } };
+inline constexpr IID IID_ID3D12GraphicsCommandList9 = OFFICIAL_IID_ID3D12GraphicsCommandList9;
+
+class ID3D12GraphicsCommandList9 : public ID3D12GraphicsCommandList8 {
+public:
+    virtual void RSSetDepthBias(float DepthBias, float DepthBiasClamp, float SlopeScaledDepthBias) = 0;
+    virtual void IASetIndexBufferStripCutValue(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue) = 0;
+};
+
+// ============================================================================
 // 4. Concrete Implementation: Prism3D12GraphicsCommandList7Impl
 // ============================================================================
 
-class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList7 {
+class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList9 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ID3D12Device* m_pDevice{ nullptr };
@@ -135,6 +168,13 @@ private:
     uint32_t m_samplesPerPixel{ 0 };
     uint32_t m_viewInstanceMask{ 0 };
     ID3D12ProtectedResourceSession* m_pProtectedSession{ nullptr };
+
+    uint32_t m_frontStencilRef{ 0 };
+    uint32_t m_backStencilRef{ 0 };
+    float m_depthBias{ 0.0f };
+    float m_depthBiasClamp{ 0.0f };
+    float m_slopeScaledDepthBias{ 0.0f };
+    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE m_ibStripCutValue{ D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED };
 
     struct RecordedBarrierGroup {
         D3D12_BARRIER_TYPE type;
@@ -169,6 +209,16 @@ public:
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList7_Agility ||
             riid == IID_ID3D12GraphicsCommandList7) {
             *ppv = static_cast<ID3D12GraphicsCommandList7*>(this);
+            AddRef();
+            return 0;
+        }
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList8 || riid == IID_ID3D12GraphicsCommandList8) {
+            *ppv = static_cast<ID3D12GraphicsCommandList8*>(this);
+            AddRef();
+            return 0;
+        }
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList9 || riid == IID_ID3D12GraphicsCommandList9) {
+            *ppv = static_cast<ID3D12GraphicsCommandList9*>(this);
             AddRef();
             return 0;
         }
@@ -209,6 +259,12 @@ public:
         m_recordedBarriers.clear();
         m_recordedWriteBufferImmediates.clear();
         m_pProtectedSession = nullptr;
+        m_frontStencilRef = 0;
+        m_backStencilRef = 0;
+        m_depthBias = 0.0f;
+        m_depthBiasClamp = 0.0f;
+        m_slopeScaledDepthBias = 0.0f;
+        m_ibStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
         m_isOpen = true;
         return 0;
     }
@@ -295,6 +351,33 @@ public:
     size_t GetWriteBufferImmediateCount() const noexcept { return m_recordedWriteBufferImmediates.size(); }
     const std::vector<WriteBufferImmediateRecord>& GetRecordedWriteBufferImmediates() const noexcept { return m_recordedWriteBufferImmediates; }
     ID3D12ProtectedResourceSession* GetProtectedResourceSession() const noexcept { return m_pProtectedSession; }
+
+    // ID3D12GraphicsCommandList8
+    void OMSetFrontAndBackStencilRef(uint32_t FrontStencilRef, uint32_t BackStencilRef) override {
+        m_frontStencilRef = FrontStencilRef;
+        m_backStencilRef = BackStencilRef;
+    }
+
+    // ID3D12GraphicsCommandList9
+    void RSSetDepthBias(float DepthBias, float DepthBiasClamp, float SlopeScaledDepthBias) override {
+        m_depthBias = DepthBias;
+        m_depthBiasClamp = DepthBiasClamp;
+        m_slopeScaledDepthBias = SlopeScaledDepthBias;
+    }
+
+    void IASetIndexBufferStripCutValue(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE IBStripCutValue) override {
+        m_ibStripCutValue = IBStripCutValue;
+    }
+
+    uint32_t GetFrontStencilRef() const noexcept { return m_frontStencilRef; }
+    uint32_t GetBackStencilRef() const noexcept { return m_backStencilRef; }
+    float GetDepthBias() const noexcept { return m_depthBias; }
+    float GetDepthBiasClamp() const noexcept { return m_depthBiasClamp; }
+    float GetSlopeScaledDepthBias() const noexcept { return m_slopeScaledDepthBias; }
+    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE GetIndexBufferStripCutValue() const noexcept { return m_ibStripCutValue; }
 };
+
+using Prism3D12GraphicsCommandList8Impl = Prism3D12GraphicsCommandList7Impl;
+using Prism3D12GraphicsCommandList9Impl = Prism3D12GraphicsCommandList7Impl;
 
 } // namespace prismx

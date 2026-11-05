@@ -84,7 +84,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS19        = 52,
     D3D12_FEATURE_ABI_D3D12_OPTIONS20        = 53,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS22        = 61
+    D3D12_FEATURE_ABI_D3D12_OPTIONS22        = 61,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS23        = 62
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -276,6 +277,12 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI {
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS22_ABI {
     uint32_t Max1DDispatchSize;
     uint32_t Max1DDispatchMeshSize;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS23_ABI {
+    int32_t DynamicDepthBiasClampSupported;
+    int32_t DynamicIndexBufferStripCutSupported;
+    int32_t SubobjectCreationSupported;
 };
 
 // ============================================================================
@@ -597,6 +604,14 @@ public:
                 auto* o22 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS22_ABI*>(pData);
                 o22->Max1DDispatchSize     = 1073741824u; // 1G dispatches (modern 1D limit)
                 o22->Max1DDispatchMeshSize = 1073741824u; // 1G dispatches (modern 1D mesh limit)
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS23: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS23_ABI)) return E_INVALIDARG;
+                auto* o23 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS23_ABI*>(pData);
+                o23->DynamicDepthBiasClampSupported      = 1;
+                o23->DynamicIndexBufferStripCutSupported = 1;
+                o23->SubobjectCreationSupported          = 1;
                 return S_OK;
             }
             default:

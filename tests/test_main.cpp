@@ -4755,6 +4755,62 @@ int Test_PrismX_Official_D3D12_CommandList7_And_Options22() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_CommandList8_9_And_Options23() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_CommandList8_9_And_Options23")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Check Feature Support: Options 23
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS23_ABI opt23{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS23, &opt23, sizeof(opt23));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opt23.DynamicDepthBiasClampSupported == 1);
+    PRISMX_ASSERT(opt23.DynamicIndexBufferStripCutSupported == 1);
+    PRISMX_ASSERT(opt23.SubobjectCreationSupported == 1);
+
+    // 2. CommandList8 & CommandList9 Interface Queries
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    ID3D12GraphicsCommandList8* pCmdList8 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList8, reinterpret_cast<void**>(&pCmdList8));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList8 != nullptr);
+
+    ID3D12GraphicsCommandList9* pCmdList9 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList9, reinterpret_cast<void**>(&pCmdList9));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList9 != nullptr);
+
+    // 3. Test Front and Back Stencil Reference (ID3D12GraphicsCommandList8)
+    pCmdList8->OMSetFrontAndBackStencilRef(0xAB, 0xCD);
+    PRISMX_ASSERT(cmdList.GetFrontStencilRef() == 0xAB);
+    PRISMX_ASSERT(cmdList.GetBackStencilRef() == 0xCD);
+
+    // 4. Test Dynamic Depth Bias & Strip Cut (ID3D12GraphicsCommandList9)
+    pCmdList9->RSSetDepthBias(1.5f, 0.25f, 2.0f);
+    PRISMX_ASSERT(std::abs(cmdList.GetDepthBias() - 1.5f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(cmdList.GetDepthBiasClamp() - 0.25f) < 1e-4f);
+    PRISMX_ASSERT(std::abs(cmdList.GetSlopeScaledDepthBias() - 2.0f) < 1e-4f);
+
+    pCmdList9->IASetIndexBufferStripCutValue(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF);
+    PRISMX_ASSERT(cmdList.GetIndexBufferStripCutValue() == D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF);
+
+    // 5. Test Reset restores defaults
+    cmdList.Reset(nullptr, nullptr);
+    PRISMX_ASSERT(cmdList.GetFrontStencilRef() == 0);
+    PRISMX_ASSERT(cmdList.GetBackStencilRef() == 0);
+    PRISMX_ASSERT(cmdList.GetDepthBias() == 0.0f);
+    PRISMX_ASSERT(cmdList.GetIndexBufferStripCutValue() == D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED);
+
+    pCmdList8->Release();
+    pCmdList9->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4814,9 +4870,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_CommandList5_And_Options20() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList6_And_Options21() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList7_And_Options22() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList8_9_And_Options23() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (53/53)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (54/54)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
