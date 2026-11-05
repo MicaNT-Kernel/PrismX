@@ -4927,6 +4927,75 @@ int Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Query and Validate ID3D12Device12 & GetResourceAllocationInfo3
+    ID3D12Device12* pDev12 = nullptr;
+    int32_t hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device12, reinterpret_cast<void**>(&pDev12));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev12 != nullptr);
+
+    D3D12_RESOURCE_ALLOCATION_INFO1_ABI allocInfo1[2]{};
+    D3D12_RESOURCE_ALLOCATION_INFO_ABI allocInfo = pDev12->GetResourceAllocationInfo3(
+        0, 1, nullptr, nullptr, nullptr, allocInfo1);
+    PRISMX_ASSERT(allocInfo.SizeInBytes == 65536ULL);
+    PRISMX_ASSERT(allocInfo.Alignment == 65536ULL);
+    PRISMX_ASSERT(allocInfo1[0].Offset == 0);
+    pDev12->Release();
+
+    // 2. Query and Validate ID3D12Device13 & OpenExistingHeapFromAddress1
+    ID3D12Device13* pDev13 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device13, reinterpret_cast<void**>(&pDev13));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev13 != nullptr);
+
+    uint8_t mockBuffer[4096]{};
+    void* pHeap = nullptr;
+    hr = pDev13->OpenExistingHeapFromAddress1(mockBuffer, sizeof(mockBuffer), OFFICIAL_IID_ID3D12Device, &pHeap);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pHeap != nullptr);
+    static_cast<IUnknown*>(pHeap)->Release();
+    pDev13->Release();
+
+    // 3. Query and Validate ID3D12Device14 & TryCreate Methods
+    ID3D12Device14* pDev14 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device14, reinterpret_cast<void**>(&pDev14));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev14 != nullptr);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE hDesc{ 0x2000 };
+    hr = pDev14->TryCreateShaderResourceView(nullptr, nullptr, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    hr = pDev14->TryCreateUnorderedAccessView(nullptr, nullptr, nullptr, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    hr = pDev14->TryCreateConstantBufferView(nullptr, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    D3D12_SAMPLER_DESC2 sDesc{};
+    sDesc.Filter = D3D12_FILTER_ANISOTROPIC;
+    sDesc.UintBorderColor[0] = 0xFF;
+    hr = pDev14->TryCreateSampler2(&sDesc, hDesc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    pDev14->Release();
+
+    // 4. Validate Alternate ID3D12Device14 IID
+    ID3D12Device14* pDev14Alt = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device14Alt, reinterpret_cast<void**>(&pDev14Alt));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev14Alt != nullptr);
+    pDev14Alt->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4989,9 +5058,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_CommandList8_9_And_Options23() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (56/56)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (57/57)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

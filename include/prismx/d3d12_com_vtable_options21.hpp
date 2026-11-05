@@ -39,7 +39,11 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device11 =
     { 0x5405c344, 0xd457, 0x444e, { 0xb4, 0xdd, 0x23, 0x66, 0xe4, 0x5a, 0xee, 0x39 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device12 =
     { 0x5af5c532, 0x4c91, 0x4cd0, { 0xb5, 0x41, 0x15, 0xa4, 0x05, 0x39, 0x5f, 0xc5 } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device13 =
+    { 0x14eecffc, 0x4df8, 0x40f7, { 0xa1, 0x18, 0x5c, 0x81, 0x6f, 0x45, 0x69, 0x5e } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device14 =
+    { 0x5f6e592d, 0xd895, 0x44c2, { 0x8e, 0x4a, 0x88, 0xad, 0x49, 0x26, 0xd3, 0x23 } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device14Alt =
     { 0x53176779, 0x6099, 0x401c, { 0xa3, 0x70, 0x06, 0x73, 0x08, 0x54, 0x3d, 0x8b } };
 
 inline constexpr IID OFFICIAL_IID_ID3D12PipelineLibrary =
@@ -456,12 +460,59 @@ struct D3D12_SAMPLER_DESC2 {
     D3D12_SAMPLER_FLAGS        Flags;
 };
 
+struct D3D12_RESOURCE_ALLOCATION_INFO1_ABI {
+    uint64_t Offset;
+    D3D12_RESOURCE_ALLOCATION_INFO_ABI AlignmentInfo;
+};
+
 class ID3D12Device11 : public ID3D12DeviceCanonicalVTable {
 public:
     virtual void CreateSampler2(const D3D12_SAMPLER_DESC2* pDesc, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12Device11 {
+class ID3D12Device12 : public ID3D12Device11 {
+public:
+    virtual D3D12_RESOURCE_ALLOCATION_INFO_ABI GetResourceAllocationInfo3(
+        uint32_t visibleMask,
+        uint32_t numResourceDescs,
+        const void* pResourceDescs,
+        const uint32_t* pNumCastableFormats,
+        const void* const* ppCastableFormats,
+        D3D12_RESOURCE_ALLOCATION_INFO1_ABI* pResourceAllocationInfo1) = 0;
+};
+
+class ID3D12Device13 : public ID3D12Device12 {
+public:
+    virtual HRESULT OpenExistingHeapFromAddress1(
+        const void* pAddress,
+        size_t size,
+        const IID& riid,
+        void** ppvHeap) = 0;
+};
+
+class ID3D12Device14 : public ID3D12Device13 {
+public:
+    virtual HRESULT TryCreateShaderResourceView(
+        ID3D12Resource* pResource,
+        const void* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
+
+    virtual HRESULT TryCreateUnorderedAccessView(
+        ID3D12Resource* pResource,
+        ID3D12Resource* pCounterResource,
+        const void* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
+
+    virtual HRESULT TryCreateConstantBufferView(
+        const void* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
+
+    virtual HRESULT TryCreateSampler2(
+        const D3D12_SAMPLER_DESC2* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
+};
+
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device14 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -485,8 +536,10 @@ public:
             riid == OFFICIAL_IID_ID3D12Device10 ||
             riid == OFFICIAL_IID_ID3D12Device11 ||
             riid == OFFICIAL_IID_ID3D12Device12 ||
-            riid == OFFICIAL_IID_ID3D12Device14) {
-            *ppv = static_cast<ID3D12Device11*>(this);
+            riid == OFFICIAL_IID_ID3D12Device13 ||
+            riid == OFFICIAL_IID_ID3D12Device14 ||
+            riid == OFFICIAL_IID_ID3D12Device14Alt) {
+            *ppv = static_cast<ID3D12Device14*>(this);
             AddRef();
             return S_OK;
         }
@@ -744,6 +797,62 @@ public:
     }
     void CreateSampler(const void*, D3D12_CPU_DESCRIPTOR_HANDLE) override {}
     void CreateSampler2(const D3D12_SAMPLER_DESC2*, D3D12_CPU_DESCRIPTOR_HANDLE) override {}
+
+    D3D12_RESOURCE_ALLOCATION_INFO_ABI GetResourceAllocationInfo3(
+        uint32_t visibleMask,
+        uint32_t numResourceDescs,
+        const void* pResourceDescs,
+        const uint32_t* pNumCastableFormats,
+        const void* const* ppCastableFormats,
+        D3D12_RESOURCE_ALLOCATION_INFO1_ABI* pResourceAllocationInfo1) override {
+        (void)visibleMask; (void)pResourceDescs; (void)pNumCastableFormats; (void)ppCastableFormats;
+        D3D12_RESOURCE_ALLOCATION_INFO_ABI info{ .SizeInBytes = 65536ULL * (numResourceDescs ? numResourceDescs : 1), .Alignment = 65536ULL };
+        if (pResourceAllocationInfo1 && numResourceDescs > 0) {
+            pResourceAllocationInfo1[0].Offset = 0;
+            pResourceAllocationInfo1[0].AlignmentInfo = info;
+        }
+        return info;
+    }
+
+    HRESULT OpenExistingHeapFromAddress1(
+        const void* pAddress,
+        size_t size,
+        const IID& riid,
+        void** ppvHeap) override {
+        if (!pAddress || size == 0 || !ppvHeap) return E_INVALIDARG;
+        return QueryInterface(riid, ppvHeap);
+    }
+
+    HRESULT TryCreateShaderResourceView(
+        ID3D12Resource* pResource,
+        const void* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) override {
+        CreateShaderResourceView(pResource, pDesc, DestDescriptor);
+        return S_OK;
+    }
+
+    HRESULT TryCreateUnorderedAccessView(
+        ID3D12Resource* pResource,
+        ID3D12Resource* pCounterResource,
+        const void* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) override {
+        CreateUnorderedAccessView(pResource, pCounterResource, pDesc, DestDescriptor);
+        return S_OK;
+    }
+
+    HRESULT TryCreateConstantBufferView(
+        const void* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) override {
+        CreateConstantBufferView(pDesc, DestDescriptor);
+        return S_OK;
+    }
+
+    HRESULT TryCreateSampler2(
+        const D3D12_SAMPLER_DESC2* pDesc,
+        D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) override {
+        CreateSampler2(pDesc, DestDescriptor);
+        return S_OK;
+    }
     void CopyDescriptors(uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
     void CopyDescriptorsSimple(uint32_t, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
     D3D12_RESOURCE_ALLOCATION_INFO_ABI GetResourceAllocationInfo(uint32_t, uint32_t, const D3D12_RESOURCE_DESC* pDesc) override {
