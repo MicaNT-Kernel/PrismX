@@ -75,10 +75,39 @@ public:
 };
 
 // ============================================================================
-// 4. ID3D12GraphicsCommandList7 (Enhanced Barriers)
+// 4. ID3D12GraphicsCommandList3 (Protected Resource Session)
 // ============================================================================
 
-class ID3D12GraphicsCommandList7 : public ID3D12GraphicsCommandList2 {
+// {6bee3950-4446-44a2-8bc4-03d0aa1f0427}
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList3 = {
+    0x6bee3950, 0x4446, 0x44a2, { 0x8b, 0xc4, 0x03, 0xd0, 0xaa, 0x1f, 0x04, 0x27 }
+};
+
+// {70470636-2f0f-48d2-8926-2bb16839352e}
+inline constexpr IID OFFICIAL_IID_ID3D12ProtectedResourceSession = {
+    0x70470636, 0x2f0f, 0x48d2, { 0x89, 0x26, 0x2b, 0xb1, 0x68, 0x39, 0x35, 0x2e }
+};
+
+class ID3D12ProtectedSession : public ID3D12DeviceChild {
+public:
+    virtual int32_t GetSessionStatus() = 0;
+};
+
+class ID3D12ProtectedResourceSession : public ID3D12ProtectedSession {
+public:
+    virtual void GetDesc(void* pDesc) = 0;
+};
+
+class ID3D12GraphicsCommandList3 : public ID3D12GraphicsCommandList2 {
+public:
+    virtual void SetProtectedResourceSession(ID3D12ProtectedResourceSession* pProtectedSession) = 0;
+};
+
+// ============================================================================
+// 5. ID3D12GraphicsCommandList7 (Enhanced Barriers)
+// ============================================================================
+
+class ID3D12GraphicsCommandList7 : public ID3D12GraphicsCommandList3 {
 public:
     virtual void Barrier(uint32_t NumBarrierGroups, const D3D12_BARRIER_GROUP* pBarrierGroups) = 0;
 };
@@ -98,6 +127,7 @@ private:
     std::vector<D3D12_SAMPLE_POSITION> m_samplePositions;
     uint32_t m_samplesPerPixel{ 0 };
     uint32_t m_viewInstanceMask{ 0 };
+    ID3D12ProtectedResourceSession* m_pProtectedSession{ nullptr };
 
     struct RecordedBarrierGroup {
         D3D12_BARRIER_TYPE type;
@@ -127,6 +157,7 @@ public:
             riid == IID_ID3D12CommandList || riid == IID_ID3D12GraphicsCommandList ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList1 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList2 ||
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList3 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList7) {
             *ppv = static_cast<ID3D12GraphicsCommandList7*>(this);
             AddRef();
@@ -168,6 +199,7 @@ public:
         m_viewInstanceMask = 0;
         m_recordedBarriers.clear();
         m_recordedWriteBufferImmediates.clear();
+        m_pProtectedSession = nullptr;
         m_isOpen = true;
         return 0;
     }
@@ -176,6 +208,7 @@ public:
         m_samplePositions.clear();
         m_recordedBarriers.clear();
         m_recordedWriteBufferImmediates.clear();
+        m_pProtectedSession = nullptr;
     }
 
     void ResourceBarrier(uint32_t, const D3D12_RESOURCE_BARRIER*) override {}
@@ -220,6 +253,11 @@ public:
         }
     }
 
+    // ID3D12GraphicsCommandList3
+    void SetProtectedResourceSession(ID3D12ProtectedResourceSession* pProtectedSession) override {
+        m_pProtectedSession = pProtectedSession;
+    }
+
     // ID3D12GraphicsCommandList7
     void Barrier(uint32_t NumBarrierGroups, const D3D12_BARRIER_GROUP* pBarrierGroups) override {
         if (!pBarrierGroups) return;
@@ -247,6 +285,7 @@ public:
     const RecordedBarrierGroup& GetRecordedBarrierGroup(size_t idx) const { return m_recordedBarriers[idx]; }
     size_t GetWriteBufferImmediateCount() const noexcept { return m_recordedWriteBufferImmediates.size(); }
     const std::vector<WriteBufferImmediateRecord>& GetRecordedWriteBufferImmediates() const noexcept { return m_recordedWriteBufferImmediates; }
+    ID3D12ProtectedResourceSession* GetProtectedResourceSession() const noexcept { return m_pProtectedSession; }
 };
 
 } // namespace prismx

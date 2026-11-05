@@ -4436,6 +4436,45 @@ int Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15()
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. CheckFeatureSupport for Options 16
+    D3D12ComAbi::PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI opts16{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS16, &opts16, sizeof(opts16));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts16.DynamicDepthBiasSupported == 1);
+    PRISMX_ASSERT(opts16.GPUUploadHeapSupported == 1);
+
+    // 2. QueryInterface for OFFICIAL_IID_ID3D12GraphicsCommandList3
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, nullptr);
+    ID3D12GraphicsCommandList3* pCmd3 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList3, reinterpret_cast<void**>(&pCmd3));
+    PRISMX_ASSERT(SUCCEEDED(hr) && pCmd3 != nullptr);
+
+    // 3. SetProtectedResourceSession & inspection
+    auto* dummySession = reinterpret_cast<ID3D12ProtectedResourceSession*>(0xBEEFCAFE);
+    pCmd3->SetProtectedResourceSession(dummySession);
+    PRISMX_ASSERT(cmdList.GetProtectedResourceSession() == dummySession);
+
+    // 4. Verify Reset clears session
+    cmdList.Reset(nullptr, nullptr);
+    PRISMX_ASSERT(cmdList.GetProtectedResourceSession() == nullptr);
+
+    // 5. Verify ClearState clears session
+    pCmd3->SetProtectedResourceSession(dummySession);
+    PRISMX_ASSERT(cmdList.GetProtectedResourceSession() == dummySession);
+    cmdList.ClearState(nullptr);
+    PRISMX_ASSERT(cmdList.GetProtectedResourceSession() == nullptr);
+
+    pCmd3->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4488,9 +4527,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_EnhancedBarriers_And_CommandList7() != 0) return 1;
     if (Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14() != 0) return 1;
     if (Test_PrismX_Official_D3D12_WriteBufferImmediate_And_CommandList2_Options15() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (47/47)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (48/48)    \n";
     std::cout << "========================================================\n";
     return 0;
 }
