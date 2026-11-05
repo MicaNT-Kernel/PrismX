@@ -85,7 +85,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS20        = 53,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60,
     D3D12_FEATURE_ABI_D3D12_OPTIONS22        = 61,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS23        = 62
+    D3D12_FEATURE_ABI_D3D12_OPTIONS23        = 62,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS24        = 63
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -283,6 +284,12 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS23_ABI {
     int32_t DynamicDepthBiasClampSupported;
     int32_t DynamicIndexBufferStripCutSupported;
     int32_t SubobjectCreationSupported;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS24_ABI {
+    uint32_t WorkGraphsTier; // D3D12_WORK_GRAPHS_TIER_1_1
+    int32_t  GenericProgramsSupported;
+    int32_t  SubobjectCreationSupported;
 };
 
 // ============================================================================
@@ -612,6 +619,14 @@ public:
                 o23->DynamicDepthBiasClampSupported      = 1;
                 o23->DynamicIndexBufferStripCutSupported = 1;
                 o23->SubobjectCreationSupported          = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS24: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS24_ABI)) return E_INVALIDARG;
+                auto* o24 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS24_ABI*>(pData);
+                o24->WorkGraphsTier             = 11u; // Tier 1.1
+                o24->GenericProgramsSupported   = 1;
+                o24->SubobjectCreationSupported = 1;
                 return S_OK;
             }
             default:

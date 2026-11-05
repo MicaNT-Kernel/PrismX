@@ -11,6 +11,7 @@
 #include "types.hpp"
 #include "d3d12.hpp"
 #include "d3d12_com_vtable_options21.hpp"
+#include "d3d12raytracing.hpp"
 #include "agility_dred_vulkanon12_video.hpp"
 #include <vector>
 #include <cstring>
@@ -156,7 +157,72 @@ public:
 // 4. Concrete Implementation: Prism3D12GraphicsCommandList7Impl
 // ============================================================================
 
-class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList9 {
+// ============================================================================
+// ID3D12GraphicsCommandList10 (Work Graphs Tier 1.1 & Generic Programs)
+// ============================================================================
+
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList10 =
+    { 0x217d12bc, 0x1f72, 0x4f72, { 0x87, 0x05, 0x76, 0x8a, 0x48, 0x49, 0x89, 0xb8 } };
+inline constexpr IID IID_ID3D12GraphicsCommandList10 = OFFICIAL_IID_ID3D12GraphicsCommandList10;
+
+enum D3D12_PROGRAM_TYPE : uint32_t {
+    D3D12_PROGRAM_TYPE_GENERIC_PIPELINE    = 1,
+    D3D12_PROGRAM_TYPE_RAYTRACING_PIPELINE = 2,
+    D3D12_PROGRAM_TYPE_WORK_GRAPH          = 3
+};
+
+struct D3D12_SET_WORK_GRAPH_DESC {
+    D3D12_GPU_VIRTUAL_ADDRESS_RANGE            ProgramIdentifier{};
+    uint32_t                                   Flags{ 0 };
+    D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE BackingMemory{};
+    D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE NodeLocalRootArgumentsTable{};
+};
+
+struct D3D12_SET_PROGRAM_DESC {
+    D3D12_PROGRAM_TYPE Type{ D3D12_PROGRAM_TYPE_WORK_GRAPH };
+    union {
+        D3D12_SET_WORK_GRAPH_DESC WorkGraph;
+    };
+};
+
+enum D3D12_DISPATCH_MODE : uint32_t {
+    D3D12_DISPATCH_MODE_NODE_CPU_INPUT = 0,
+    D3D12_DISPATCH_MODE_NODE_GPU_INPUT = 1
+};
+
+struct D3D12_NODE_CPU_INPUT {
+    uint32_t    EntrypointIndex{ 0 };
+    uint32_t    NumRecords{ 0 };
+    const void* pRecords{ nullptr };
+    uint64_t    RecordStrideInBytes{ 0 };
+};
+
+struct D3D12_NODE_GPU_INPUT {
+    uint32_t                  EntrypointIndex{ 0 };
+    uint32_t                  NumRecords{ 0 };
+    D3D12_GPU_VIRTUAL_ADDRESS Records{ 0 };
+    uint64_t                  RecordStrideInBytes{ 0 };
+};
+
+struct D3D12_DISPATCH_GRAPH_DESC {
+    D3D12_DISPATCH_MODE Mode{ D3D12_DISPATCH_MODE_NODE_CPU_INPUT };
+    union {
+        D3D12_NODE_CPU_INPUT NodeCPUInput;
+        D3D12_NODE_GPU_INPUT NodeGPUInput;
+    };
+};
+
+class ID3D12GraphicsCommandList10 : public ID3D12GraphicsCommandList9 {
+public:
+    virtual void SetProgram(const D3D12_SET_PROGRAM_DESC* pDesc) = 0;
+    virtual void DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC* pDesc) = 0;
+};
+
+// ============================================================================
+// 4. Concrete Implementation: Prism3D12GraphicsCommandList7Impl
+// ============================================================================
+
+class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList10 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ID3D12Device* m_pDevice{ nullptr };
@@ -175,6 +241,10 @@ private:
     float m_depthBiasClamp{ 0.0f };
     float m_slopeScaledDepthBias{ 0.0f };
     D3D12_INDEX_BUFFER_STRIP_CUT_VALUE m_ibStripCutValue{ D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED };
+
+    D3D12_SET_PROGRAM_DESC m_activeProgramDesc{};
+    bool m_hasActiveProgram{ false };
+    std::vector<D3D12_DISPATCH_GRAPH_DESC> m_recordedDispatchGraphs;
 
     struct RecordedBarrierGroup {
         D3D12_BARRIER_TYPE type;
@@ -219,6 +289,11 @@ public:
         }
         if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList9 || riid == IID_ID3D12GraphicsCommandList9) {
             *ppv = static_cast<ID3D12GraphicsCommandList9*>(this);
+            AddRef();
+            return 0;
+        }
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList10 || riid == IID_ID3D12GraphicsCommandList10) {
+            *ppv = static_cast<ID3D12GraphicsCommandList10*>(this);
             AddRef();
             return 0;
         }
@@ -375,9 +450,31 @@ public:
     float GetDepthBiasClamp() const noexcept { return m_depthBiasClamp; }
     float GetSlopeScaledDepthBias() const noexcept { return m_slopeScaledDepthBias; }
     D3D12_INDEX_BUFFER_STRIP_CUT_VALUE GetIndexBufferStripCutValue() const noexcept { return m_ibStripCutValue; }
+
+    // ID3D12GraphicsCommandList10
+    void SetProgram(const D3D12_SET_PROGRAM_DESC* pDesc) override {
+        if (pDesc) {
+            m_activeProgramDesc = *pDesc;
+            m_hasActiveProgram = true;
+        } else {
+            m_hasActiveProgram = false;
+        }
+    }
+
+    void DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC* pDesc) override {
+        if (pDesc) {
+            m_recordedDispatchGraphs.push_back(*pDesc);
+        }
+    }
+
+    bool HasActiveProgram() const noexcept { return m_hasActiveProgram; }
+    D3D12_PROGRAM_TYPE GetActiveProgramType() const noexcept { return m_activeProgramDesc.Type; }
+    size_t GetRecordedDispatchGraphCount() const noexcept { return m_recordedDispatchGraphs.size(); }
+    const std::vector<D3D12_DISPATCH_GRAPH_DESC>& GetRecordedDispatchGraphs() const noexcept { return m_recordedDispatchGraphs; }
 };
 
 using Prism3D12GraphicsCommandList8Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList9Impl = Prism3D12GraphicsCommandList7Impl;
+using Prism3D12GraphicsCommandList10Impl = Prism3D12GraphicsCommandList7Impl;
 
 } // namespace prismx

@@ -4811,6 +4811,68 @@ int Test_PrismX_Official_D3D12_CommandList8_9_And_Options23() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Check Feature Support: Options 24 (Work Graphs Tier 1.1)
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS24_ABI opt24{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS24, &opt24, sizeof(opt24));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opt24.WorkGraphsTier == 11u);
+    PRISMX_ASSERT(opt24.GenericProgramsSupported == 1);
+    PRISMX_ASSERT(opt24.SubobjectCreationSupported == 1);
+
+    // 2. CommandList10 Interface Query
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    ID3D12GraphicsCommandList10* pCmdList10 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList10, reinterpret_cast<void**>(&pCmdList10));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList10 != nullptr);
+
+    ID3D12GraphicsCommandList10* pCmdList10_canonical = nullptr;
+    hr = cmdList.QueryInterface(IID_ID3D12GraphicsCommandList10, reinterpret_cast<void**>(&pCmdList10_canonical));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList10_canonical != nullptr);
+    pCmdList10_canonical->Release();
+
+    // 3. Test SetProgram (Work Graph Program)
+    PRISMX_ASSERT(!cmdList.HasActiveProgram());
+    D3D12_SET_PROGRAM_DESC progDesc{};
+    progDesc.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
+    progDesc.WorkGraph.ProgramIdentifier.StartAddress = 0x80000000ULL;
+    progDesc.WorkGraph.ProgramIdentifier.SizeInBytes = 65536;
+    progDesc.WorkGraph.Flags = 0x1;
+    pCmdList10->SetProgram(&progDesc);
+
+    PRISMX_ASSERT(cmdList.HasActiveProgram());
+    PRISMX_ASSERT(cmdList.GetActiveProgramType() == D3D12_PROGRAM_TYPE_WORK_GRAPH);
+
+    // 4. Test DispatchGraph
+    PRISMX_ASSERT(cmdList.GetRecordedDispatchGraphCount() == 0);
+    D3D12_DISPATCH_GRAPH_DESC dispatchDesc{};
+    dispatchDesc.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
+    dispatchDesc.NodeCPUInput.EntrypointIndex = 1;
+    dispatchDesc.NodeCPUInput.NumRecords = 128;
+    dispatchDesc.NodeCPUInput.RecordStrideInBytes = 32;
+    pCmdList10->DispatchGraph(&dispatchDesc);
+
+    PRISMX_ASSERT(cmdList.GetRecordedDispatchGraphCount() == 1);
+    const auto& graphs = cmdList.GetRecordedDispatchGraphs();
+    PRISMX_ASSERT(graphs[0].Mode == D3D12_DISPATCH_MODE_NODE_CPU_INPUT);
+    PRISMX_ASSERT(graphs[0].NodeCPUInput.EntrypointIndex == 1);
+    PRISMX_ASSERT(graphs[0].NodeCPUInput.NumRecords == 128);
+
+    pCmdList10->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4871,9 +4933,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_CommandList6_And_Options21() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList7_And_Options22() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList8_9_And_Options23() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList10_WorkGraphs_And_Options24() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (54/54)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (55/55)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
