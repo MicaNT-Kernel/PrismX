@@ -61,6 +61,10 @@ inline constexpr IID IID_ID3D12GraphicsCommandList6 = {
     0xc3827890, 0xe548, 0x4cfa, { 0x81, 0x4f, 0x4a, 0x0f, 0x0f, 0x07, 0x4e, 0x54 }
 };
 
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList6 = {
+    0xc3827890, 0xe548, 0x4da2, { 0x89, 0xb6, 0xac, 0x3f, 0x4a, 0xd1, 0xba, 0x61 }
+};
+
 inline constexpr IID IID_ID3D12StateObject = {
     0x470c66d6, 0xdd86, 0x4149, { 0x91, 0x30, 0xda, 0x63, 0x31, 0xbb, 0xf0, 0xa8 }
 };
@@ -515,7 +519,8 @@ public:
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList4 ||
             riid == IID_ID3D12GraphicsCommandList5 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList5 ||
-            riid == IID_ID3D12GraphicsCommandList6) {
+            riid == IID_ID3D12GraphicsCommandList6 ||
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList6) {
             *ppv = static_cast<ID3D12GraphicsCommandList6*>(this);
             AddRef();
             return 0;

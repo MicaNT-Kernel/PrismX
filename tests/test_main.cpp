@@ -4645,6 +4645,53 @@ int Test_PrismX_Official_D3D12_CommandList5_And_Options20() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_CommandList6_And_Options21() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_CommandList6_And_Options21")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Verify CheckFeatureSupport for D3D12_FEATURE_ABI_D3D12_OPTIONS21
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI opts21{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS21, &opts21, sizeof(opts21));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts21.WorkGraphsTier == 11);
+    PRISMX_ASSERT(opts21.ExecuteIndirectTier == 11);
+    PRISMX_ASSERT(opts21.SampleCmpGradientAndBiasSupported == 1);
+    PRISMX_ASSERT(opts21.ExtendedCommandInfoSupported == 1);
+
+    // 2. Instantiate Prism3D12GraphicsCommandListRaytracingImpl
+    Prism3D12GraphicsCommandListRaytracingImpl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, nullptr);
+
+    // 3. QueryInterface for IID_ID3D12GraphicsCommandList6 and OFFICIAL_IID_ID3D12GraphicsCommandList6
+    ID3D12GraphicsCommandList6* pCmdList6 = nullptr;
+    hr = cmdList.QueryInterface(IID_ID3D12GraphicsCommandList6, reinterpret_cast<void**>(&pCmdList6));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList6 != nullptr);
+
+    ID3D12GraphicsCommandList6* pOfficial6 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList6, reinterpret_cast<void**>(&pOfficial6));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pOfficial6 != nullptr);
+    pOfficial6->Release();
+
+    // 4. Test DispatchMesh
+    PRISMX_ASSERT(cmdList.getMeshDispatches() == 0);
+    PRISMX_ASSERT(cmdList.getMeshAmplifiedPrimitives() == 0);
+
+    pCmdList6->DispatchMesh(4, 2, 1);
+    PRISMX_ASSERT(cmdList.getMeshDispatches() == 1);
+    PRISMX_ASSERT(cmdList.getMeshAmplifiedPrimitives() == 512);
+
+    pCmdList6->DispatchMesh(1, 1, 1);
+    PRISMX_ASSERT(cmdList.getMeshDispatches() == 2);
+    PRISMX_ASSERT(cmdList.getMeshAmplifiedPrimitives() == 576);
+
+    pCmdList6->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4702,9 +4749,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList4_And_Options18_19() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList5_And_Options20() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList6_And_Options21() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (51/51)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (52/52)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
