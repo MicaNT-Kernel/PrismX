@@ -4590,6 +4590,61 @@ int Test_PrismX_Official_D3D12_CommandList4_And_Options18_19() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_CommandList5_And_Options20() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_CommandList5_And_Options20")
+
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Test D3D12_FEATURE_ABI_D3D12_OPTIONS20 on PrismD3D12Device14CanonicalImpl
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS20_ABI opts20{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS20, &opts20, sizeof(opts20));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts20.ProgrammableSamplePositionsTier == 1);
+    PRISMX_ASSERT(opts20.SampleLocationsTier == 2); // Tier 2
+
+    // 2. Instantiate Prism3D12GraphicsCommandListRaytracingImpl
+    Prism3D12GraphicsCommandListRaytracingImpl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, nullptr);
+
+    // 3. QueryInterface for IID_ID3D12GraphicsCommandList5 and OFFICIAL_IID_ID3D12GraphicsCommandList5
+    ID3D12GraphicsCommandList5* pCmdList5 = nullptr;
+    hr = cmdList.QueryInterface(IID_ID3D12GraphicsCommandList5, reinterpret_cast<void**>(&pCmdList5));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList5 != nullptr);
+
+    ID3D12GraphicsCommandList5* pOfficial5 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList5, reinterpret_cast<void**>(&pOfficial5));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pOfficial5 != nullptr);
+    pOfficial5->Release();
+
+    // 4. Test RSSetShadingRate
+    uint32_t combiners[2] = { 1, 2 };
+    pCmdList5->RSSetShadingRate(4, combiners);
+    PRISMX_ASSERT(cmdList.getShadingRate() == 4);
+    PRISMX_ASSERT(cmdList.getShadingRateCombiners()[0] == 1);
+    PRISMX_ASSERT(cmdList.getShadingRateCombiners()[1] == 2);
+    PRISMX_ASSERT(cmdList.getShadingRateCalls() == 1);
+
+    // 5. Test RSSetShadingRateImage
+    auto* mockImage = reinterpret_cast<ID3D12Resource*>(0x12345678);
+    pCmdList5->RSSetShadingRateImage(mockImage);
+    PRISMX_ASSERT(cmdList.getShadingRateImage() == mockImage);
+    PRISMX_ASSERT(cmdList.getShadingRateImageCalls() == 1);
+
+    // 6. Test resetRaytracingStats clears VRS state
+    cmdList.resetRaytracingStats();
+    PRISMX_ASSERT(cmdList.getShadingRate() == 0);
+    PRISMX_ASSERT(cmdList.getShadingRateImage() == nullptr);
+    PRISMX_ASSERT(cmdList.getShadingRateCalls() == 0);
+    PRISMX_ASSERT(cmdList.getShadingRateImageCalls() == 0);
+
+    pCmdList5->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4646,9 +4701,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_ProtectedSession_And_CommandList3_Options16() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Options17_And_ManualWriteTrackingResource() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList4_And_Options18_19() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList5_And_Options20() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (50/50)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (51/51)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

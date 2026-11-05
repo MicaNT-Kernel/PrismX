@@ -347,7 +347,18 @@ struct ID3D12GraphicsCommandList4 : public ID3D12GraphicsCommandList {
     virtual void DispatchRays(const D3D12_DISPATCH_RAYS_DESC* pDesc) = 0;
 };
 
-struct ID3D12GraphicsCommandList6 : public ID3D12GraphicsCommandList4 {
+static constexpr IID IID_ID3D12GraphicsCommandList5 =
+    { 0x55050853, 0x2717, 0x41c5, { 0xbb, 0x92, 0x60, 0xac, 0xac, 0x86, 0x83, 0x65 } };
+static constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList5 = IID_ID3D12GraphicsCommandList5;
+
+struct ID3D12GraphicsCommandList5 : public ID3D12GraphicsCommandList4 {
+    virtual void RSSetShadingRate(
+        uint32_t baseShadingRate,
+        const uint32_t* combiners) = 0;
+    virtual void RSSetShadingRateImage(ID3D12Resource* shadingRateImage) = 0;
+};
+
+struct ID3D12GraphicsCommandList6 : public ID3D12GraphicsCommandList5 {
     virtual void DispatchMesh(uint32_t ThreadGroupCountX, uint32_t ThreadGroupCountY, uint32_t ThreadGroupCountZ) = 0;
 };
 
@@ -468,6 +479,11 @@ private:
     uint32_t m_raysHit{ 0 };
     uint32_t m_meshDispatches{ 0 };
     uint32_t m_meshAmplifiedPrimitives{ 0 };
+    uint32_t m_shadingRate{ 0 };
+    uint32_t m_shadingRateCombiners[2]{ 0, 0 };
+    ID3D12Resource* m_pShadingRateImage{ nullptr };
+    uint32_t m_shadingRateCalls{ 0 };
+    uint32_t m_shadingRateImageCalls{ 0 };
 
     // Internal simulation geometry
     struct TriGeom {
@@ -497,6 +513,8 @@ public:
             riid == IID_ID3D12GraphicsCommandList ||
             riid == IID_ID3D12GraphicsCommandList4 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList4 ||
+            riid == IID_ID3D12GraphicsCommandList5 ||
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList5 ||
             riid == IID_ID3D12GraphicsCommandList6) {
             *ppv = static_cast<ID3D12GraphicsCommandList6*>(this);
             AddRef();
@@ -609,6 +627,21 @@ public:
         }
     }
 
+    // ID3D12GraphicsCommandList5
+    void RSSetShadingRate(uint32_t baseShadingRate, const uint32_t* combiners) override {
+        m_shadingRate = baseShadingRate;
+        if (combiners) {
+            m_shadingRateCombiners[0] = combiners[0];
+            m_shadingRateCombiners[1] = combiners[1];
+        }
+        m_shadingRateCalls++;
+    }
+
+    void RSSetShadingRateImage(ID3D12Resource* shadingRateImage) override {
+        m_pShadingRateImage = shadingRateImage;
+        m_shadingRateImageCalls++;
+    }
+
     // ID3D12GraphicsCommandList6
     void DispatchMesh(uint32_t ThreadGroupCountX, uint32_t ThreadGroupCountY, uint32_t ThreadGroupCountZ) override {
         m_meshDispatches++;
@@ -624,10 +657,21 @@ public:
     uint32_t getRaysHit() const { return m_raysHit; }
     uint32_t getMeshDispatches() const { return m_meshDispatches; }
     uint32_t getMeshAmplifiedPrimitives() const { return m_meshAmplifiedPrimitives; }
+    uint32_t getShadingRate() const { return m_shadingRate; }
+    const uint32_t* getShadingRateCombiners() const { return m_shadingRateCombiners; }
+    ID3D12Resource* getShadingRateImage() const { return m_pShadingRateImage; }
+    uint32_t getShadingRateCalls() const { return m_shadingRateCalls; }
+    uint32_t getShadingRateImageCalls() const { return m_shadingRateImageCalls; }
     void resetRaytracingStats() {
         m_asCopies = 0;
         m_tlasBuilds = 0;
         m_blasBuilds = 0;
+        m_shadingRate = 0;
+        m_shadingRateCombiners[0] = 0;
+        m_shadingRateCombiners[1] = 0;
+        m_pShadingRateImage = nullptr;
+        m_shadingRateCalls = 0;
+        m_shadingRateImageCalls = 0;
         if (m_pStateObject) {
             m_pStateObject->Release();
             m_pStateObject = nullptr;

@@ -82,6 +82,7 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS17        = 50,
     D3D12_FEATURE_ABI_D3D12_OPTIONS18        = 51,
     D3D12_FEATURE_ABI_D3D12_OPTIONS19        = 52,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS20        = 53,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60
 };
 
@@ -257,6 +258,11 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS19_ABI {
     uint32_t MaxSamplerDescriptorHeapSizeWithStaticSamplers;
     uint32_t MaxViewDescriptorHeapSize;
     int32_t  ComputeOnlyCustomHeapSupported;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS20_ABI {
+    int32_t  ProgrammableSamplePositionsTier; // 1 (TRUE)
+    uint32_t SampleLocationsTier;             // 2 (D3D12_SAMPLE_LOCATIONS_TIER_2)
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI {
@@ -562,6 +568,13 @@ public:
                 o19->MaxSamplerDescriptorHeapSizeWithStaticSamplers = 2048u;
                 o19->MaxViewDescriptorHeapSize                     = 1000000u;
                 o19->ComputeOnlyCustomHeapSupported                = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS20: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS20_ABI)) return E_INVALIDARG;
+                auto* o20 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS20_ABI*>(pData);
+                o20->ProgrammableSamplePositionsTier = 1;
+                o20->SampleLocationsTier             = 2; // Tier 2
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS21: {
