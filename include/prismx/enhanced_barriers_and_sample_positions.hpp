@@ -31,6 +31,13 @@ inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList2 =
 inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList7 =
     { 0x37a1f50b, 0x4861, 0x41dd, { 0x93, 0x3e, 0xf1, 0x4d, 0x86, 0xbf, 0xa2, 0x54 } };
 
+// Canonical Direct3D 12 Agility SDK IID: dd171223-8b61-4769-90e3-160cfb902180
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList7_Agility =
+    { 0xdd171223, 0x8b61, 0x4769, { 0x90, 0xe3, 0x16, 0x0c, 0xfb, 0x90, 0x21, 0x80 } };
+
+inline constexpr IID IID_ID3D12GraphicsCommandList7 =
+    { 0xdd171223, 0x8b61, 0x4769, { 0x90, 0xe3, 0x16, 0x0c, 0xfb, 0x90, 0x21, 0x80 } };
+
 // ============================================================================
 // 2. D3D12 Sample Position & ID3D12GraphicsCommandList1
 // ============================================================================
@@ -158,7 +165,9 @@ public:
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList1 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList2 ||
             riid == OFFICIAL_IID_ID3D12GraphicsCommandList3 ||
-            riid == OFFICIAL_IID_ID3D12GraphicsCommandList7) {
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList7 ||
+            riid == OFFICIAL_IID_ID3D12GraphicsCommandList7_Agility ||
+            riid == IID_ID3D12GraphicsCommandList7) {
             *ppv = static_cast<ID3D12GraphicsCommandList7*>(this);
             AddRef();
             return 0;

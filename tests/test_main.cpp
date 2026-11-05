@@ -4692,6 +4692,69 @@ int Test_PrismX_Official_D3D12_CommandList6_And_Options21() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_CommandList7_And_Options22() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_CommandList7_And_Options22")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Verify CheckFeatureSupport for D3D12_FEATURE_ABI_D3D12_OPTIONS22
+    PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS22_ABI opts22{};
+    int32_t hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS22, &opts22, sizeof(opts22));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts22.Max1DDispatchSize == 1073741824u);
+    PRISMX_ASSERT(opts22.Max1DDispatchMeshSize == 1073741824u);
+
+    // 2. Instantiate Command Allocator and CommandList7
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    // 3. QueryInterface for official Agility SDK IIDs
+    ID3D12GraphicsCommandList7* pCmdList7 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList7_Agility, reinterpret_cast<void**>(&pCmdList7));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList7 != nullptr);
+
+    ID3D12GraphicsCommandList7* pPreview7 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList7, reinterpret_cast<void**>(&pPreview7));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pPreview7 != nullptr);
+    pPreview7->Release();
+
+    ID3D12GraphicsCommandList7* pCanonical7 = nullptr;
+    hr = cmdList.QueryInterface(IID_ID3D12GraphicsCommandList7, reinterpret_cast<void**>(&pCanonical7));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCanonical7 != nullptr);
+    pCanonical7->Release();
+
+    // 4. Test Barrier submission
+    PRISMX_ASSERT(cmdList.GetRecordedBarrierGroupCount() == 0);
+
+    D3D12_GLOBAL_BARRIER gb{};
+    gb.SyncBefore = D3D12_BARRIER_SYNC_ALL_SHADING;
+    gb.SyncAfter  = D3D12_BARRIER_SYNC_DRAW;
+    gb.AccessBefore = D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+    gb.AccessAfter  = D3D12_BARRIER_ACCESS_SHADER_RESOURCE;
+
+    D3D12_BARRIER_GROUP group{};
+    group.Type = D3D12_BARRIER_TYPE_GLOBAL;
+    group.NumBarriers = 1;
+    group.pGlobalBarriers = &gb;
+
+    pCmdList7->Barrier(1, &group);
+    PRISMX_ASSERT(cmdList.GetRecordedBarrierGroupCount() == 1);
+    const auto& rec = cmdList.GetRecordedBarrierGroup(0);
+    PRISMX_ASSERT(rec.type == D3D12_BARRIER_TYPE_GLOBAL);
+    PRISMX_ASSERT(rec.count == 1);
+    PRISMX_ASSERT(rec.globals.size() == 1);
+    PRISMX_ASSERT(rec.globals[0].SyncBefore == D3D12_BARRIER_SYNC_ALL_SHADING);
+    PRISMX_ASSERT(rec.globals[0].AccessAfter == D3D12_BARRIER_ACCESS_SHADER_RESOURCE);
+
+    pCmdList7->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -4750,9 +4813,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_CommandList4_And_Options18_19() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList5_And_Options20() != 0) return 1;
     if (Test_PrismX_Official_D3D12_CommandList6_And_Options21() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList7_And_Options22() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (52/52)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (53/53)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
