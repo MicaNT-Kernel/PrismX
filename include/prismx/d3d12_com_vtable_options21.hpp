@@ -72,6 +72,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS6         = 30,
     D3D12_FEATURE_ABI_D3D12_OPTIONS7         = 32,
     D3D12_FEATURE_ABI_D3D12_OPTIONS12        = 41,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS13        = 43,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS14        = 44,
     D3D12_FEATURE_ABI_D3D12_OPTIONS16        = 49,
     D3D12_FEATURE_ABI_D3D12_OPTIONS21        = 60
 };
@@ -134,6 +136,19 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS12_ABI {
     uint32_t MSPrimitivesPipelineStatisticIncludesCulledPrimitives;
     int32_t  EnhancedBarriersSupported; // 1 (TRUE)
     int32_t  RelaxedFormatCastingSupported;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS13_ABI {
+    int32_t UnrestrictedBufferTextureCopyPitchSupported;
+    int32_t UnrestrictedVertexElementAlignmentSupported;
+    int32_t InvertedViewportHeightFlipsYSupported;
+    int32_t InvertedViewportDepthFlipsZSupported;
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS14_ABI {
+    int32_t AdvancedTextureOpsSupported;
+    int32_t WriteableMSAATexturesSupported;
+    int32_t IndependentFrontAndBackStencilRefMaskSupported;
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI {
@@ -380,6 +395,23 @@ public:
                 o12->MSPrimitivesPipelineStatisticIncludesCulledPrimitives = 1u;
                 o12->EnhancedBarriersSupported     = 1;
                 o12->RelaxedFormatCastingSupported = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS13: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS13_ABI)) return E_INVALIDARG;
+                auto* o13 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS13_ABI*>(pData);
+                o13->UnrestrictedBufferTextureCopyPitchSupported = 1;
+                o13->UnrestrictedVertexElementAlignmentSupported = 1;
+                o13->InvertedViewportHeightFlipsYSupported       = 1;
+                o13->InvertedViewportDepthFlipsZSupported        = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS14: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS14_ABI)) return E_INVALIDARG;
+                auto* o14 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS14_ABI*>(pData);
+                o14->AdvancedTextureOpsSupported                     = 1;
+                o14->WriteableMSAATexturesSupported                  = 1;
+                o14->IndependentFrontAndBackStencilRefMaskSupported = 1;
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {

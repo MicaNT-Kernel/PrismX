@@ -4292,6 +4292,99 @@ int Test_PrismX_Official_D3D12_ShaderCacheSession_And_Device10_Agility() {
     return 0;
 }
 
+
+int Test_PrismX_Official_D3D12_EnhancedBarriers_And_CommandList7() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_EnhancedBarriers_And_CommandList7")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. CheckFeatureSupport for Options 12 and 13
+    D3D12ComAbi::PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS12_ABI opts12{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS12, &opts12, sizeof(opts12));
+    PRISMX_ASSERT(hr == S_OK);
+    PRISMX_ASSERT(opts12.EnhancedBarriersSupported == 1);
+    PRISMX_ASSERT(opts12.RelaxedFormatCastingSupported == 1);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS13_ABI opts13{};
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS13, &opts13, sizeof(opts13));
+    PRISMX_ASSERT(hr == S_OK);
+    PRISMX_ASSERT(opts13.UnrestrictedBufferTextureCopyPitchSupported == 1);
+    PRISMX_ASSERT(opts13.UnrestrictedVertexElementAlignmentSupported == 1);
+    PRISMX_ASSERT(opts13.InvertedViewportHeightFlipsYSupported == 1);
+    PRISMX_ASSERT(opts13.InvertedViewportDepthFlipsZSupported == 1);
+
+    // 2. Command List 7 and Enhanced Barrier Execution
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    void* pOut = nullptr;
+    PRISMX_ASSERT(cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList1, &pOut) == 0 && pOut != nullptr);
+    PRISMX_ASSERT(cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList7, &pOut) == 0 && pOut != nullptr);
+
+    // Form Global Barrier
+    D3D12_GLOBAL_BARRIER gBarrier{};
+    gBarrier.SyncBefore = D3D12_BARRIER_SYNC_ALL_SHADING;
+    gBarrier.SyncAfter = D3D12_BARRIER_SYNC_COMPUTE_SHADING;
+    gBarrier.AccessBefore = D3D12_BARRIER_ACCESS_SHADER_RESOURCE;
+    gBarrier.AccessAfter = D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+
+    D3D12_BARRIER_GROUP group{};
+    group.Type = D3D12_BARRIER_TYPE_GLOBAL;
+    group.NumBarriers = 1;
+    group.pGlobalBarriers = &gBarrier;
+
+    cmdList.Barrier(1, &group);
+    PRISMX_ASSERT(cmdList.GetRecordedBarrierGroupCount() == 1);
+    const auto& recGroup = cmdList.GetRecordedBarrierGroup(0);
+    PRISMX_ASSERT(recGroup.type == D3D12_BARRIER_TYPE_GLOBAL);
+    PRISMX_ASSERT(recGroup.count == 1);
+    PRISMX_ASSERT(recGroup.globals[0].SyncBefore == D3D12_BARRIER_SYNC_ALL_SHADING);
+
+    PRISMX_PASS()
+    return 0;
+}
+
+int Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14")
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. CheckFeatureSupport for Options 14
+    D3D12ComAbi::PrismD3D12Device14CanonicalImpl dev;
+    D3D12_FEATURE_DATA_D3D12_OPTIONS14_ABI opts14{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS14, &opts14, sizeof(opts14));
+    PRISMX_ASSERT(hr == S_OK);
+    PRISMX_ASSERT(opts14.AdvancedTextureOpsSupported == 1);
+    PRISMX_ASSERT(opts14.WriteableMSAATexturesSupported == 1);
+    PRISMX_ASSERT(opts14.IndependentFrontAndBackStencilRefMaskSupported == 1);
+
+    // 2. Sample Positions on Command List 1
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    // Configure standard rotated 4x MSAA grid
+    D3D12_SAMPLE_POSITION samplePositions[4] = {
+        { -2, -6 },
+        {  6, -2 },
+        { -6,  2 },
+        {  2,  6 }
+    };
+    cmdList.SetSamplePositions(4, 1, samplePositions);
+    PRISMX_ASSERT(cmdList.GetSamplesPerPixel() == 4);
+    const auto& pos = cmdList.GetSamplePositions();
+    PRISMX_ASSERT(pos.size() == 4);
+    PRISMX_ASSERT(pos[0].X == -2 && pos[0].Y == -6);
+    PRISMX_ASSERT(pos[1].X == 6 && pos[1].Y == -2);
+    PRISMX_ASSERT(pos[2].X == -6 && pos[2].Y == 2);
+    PRISMX_ASSERT(pos[3].X == 2 && pos[3].Y == 6);
+
+    // Configure View Instance Mask
+    cmdList.SetViewInstanceMask(0x07);
+    PRISMX_ASSERT(cmdList.GetViewInstanceMask() == 0x07);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "     PrismX Sovereign Graphics Architecture Tests     \n";
@@ -4341,9 +4434,11 @@ int main() {
     if (Test_PrismX_Official_D3D12_PipelineLibrary_And_CachedBlobs() != 0) return 1;
     if (Test_PrismX_Official_D3D12_SubAllocation_And_ResourceAllocationInfo1() != 0) return 1;
     if (Test_PrismX_Official_D3D12_ShaderCacheSession_And_Device10_Agility() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_EnhancedBarriers_And_CommandList7() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_SamplePositions_And_CommandList1_Options14() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (44/44)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (46/46)    \n";
     std::cout << "========================================================\n";
     return 0;
 }

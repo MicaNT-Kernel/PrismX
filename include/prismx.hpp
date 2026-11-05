@@ -56,3 +56,4 @@
 #include "prismx/directx_system32_dll_exports.hpp"
 #include "prismx/win32_hwnd_event_dxgi_interop.hpp"
 #include "prismx/pipeline_library_and_cache.hpp"
+#include "prismx/enhanced_barriers_and_sample_positions.hpp"
