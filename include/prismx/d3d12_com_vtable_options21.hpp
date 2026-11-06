@@ -51,6 +51,8 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device16 =
     { 0x0f2f3f98, 0x65aa, 0x4dc6, { 0xbe, 0x64, 0x0c, 0xc1, 0x1d, 0x4d, 0x8a, 0x4b } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device17 =
     { 0x8e89f81d, 0x6663, 0x455b, { 0xb9, 0xd9, 0x0b, 0x79, 0x37, 0x5e, 0x11, 0x04 } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device18 =
+    { 0x77626941, 0xc68c, 0x4c67, { 0x91, 0x04, 0x58, 0x5b, 0x53, 0x77, 0xcf, 0xf8 } };
 
 inline constexpr IID OFFICIAL_CLSID_D3D12DeviceRemovedExtendedData =
     { 0x5c7ca970, 0x8a92, 0x48a1, { 0x81, 0x4d, 0x45, 0x89, 0x61, 0x93, 0x22, 0x93 } };
@@ -119,7 +121,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS26        = 65,
     D3D12_FEATURE_ABI_D3D12_OPTIONS27        = 66,
     D3D12_FEATURE_ABI_D3D12_OPTIONS28        = 67,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS29        = 68
+    D3D12_FEATURE_ABI_D3D12_OPTIONS29        = 68,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS30        = 69
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -359,6 +362,14 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS29_ABI {
     int32_t  DynamicDepthBiasClampSupported;           // 1 (TRUE)
     int32_t  BackingMemoryCustomPoolSupported;          // 1 (TRUE)
     int32_t  ComputeOnlyDeviceSupported;               // 1 (TRUE)
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS30_ABI {
+    uint32_t WorkGraphsTier;                              // 13u (Tier 1.3)
+    int32_t  NodeOutputRecordsSupported;                  // 1 (TRUE)
+    int32_t  DirectProgramRecordAllocationSupported;      // 1 (TRUE)
+    int32_t  WorkGraphBackingMemoryVirtualRemapSupported; // 1 (TRUE)
+    int32_t  ShaderExecutionReorderingSupported;          // 1 (TRUE)
 };
 
 enum D3D12_DRED_ENABLEMENT : uint32_t {
@@ -739,6 +750,19 @@ public:
         const void* pRecord) = 0;
 };
 
+class ID3D12Device18 : public ID3D12Device17 {
+public:
+    virtual HRESULT CreateWorkGraphProgramRecord2(
+        const void* pDesc,
+        uint32_t Flags,
+        const IID& riid,
+        void** ppRecord) = 0;
+
+    virtual HRESULT GetWorkGraphMemoryRequirements(
+        uint32_t ProgramIndex,
+        void* pRequirements) = 0;
+};
+
 class PrismD3D12DeviceRemovedExtendedDataSettingsImpl : public ID3D12DeviceRemovedExtendedDataSettings1 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
@@ -837,7 +861,7 @@ public:
     }
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12Device17 {
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device18 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -866,8 +890,9 @@ public:
             riid == OFFICIAL_IID_ID3D12Device14Alt ||
             riid == OFFICIAL_IID_ID3D12Device15 ||
             riid == OFFICIAL_IID_ID3D12Device16 ||
-            riid == OFFICIAL_IID_ID3D12Device17) {
-            *ppv = static_cast<ID3D12Device17*>(this);
+            riid == OFFICIAL_IID_ID3D12Device17 ||
+            riid == OFFICIAL_IID_ID3D12Device18) {
+            *ppv = static_cast<ID3D12Device18*>(this);
             AddRef();
             return S_OK;
         }
@@ -1147,6 +1172,16 @@ public:
                 o29->ComputeOnlyDeviceSupported        = 1;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS30: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS30_ABI)) return E_INVALIDARG;
+                auto* o30 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS30_ABI*>(pData);
+                o30->WorkGraphsTier                              = 13u; // Tier 1.3
+                o30->NodeOutputRecordsSupported                  = 1;
+                o30->DirectProgramRecordAllocationSupported      = 1;
+                o30->WorkGraphBackingMemoryVirtualRemapSupported = 1;
+                o30->ShaderExecutionReorderingSupported          = 1;
+                return S_OK;
+            }
             default:
                 std::memset(pData, 0, Size);
                 return S_OK;
@@ -1296,6 +1331,18 @@ public:
     }
     HRESULT SetWorkGraphProgramRecord(uint32_t ProgramIndex, const void* pRecord) override {
         (void)ProgramIndex; (void)pRecord;
+        return S_OK;
+    }
+    HRESULT CreateWorkGraphProgramRecord2(const void* pDesc, uint32_t Flags, const IID& riid, void** ppRecord) override {
+        (void)pDesc; (void)Flags; (void)riid;
+        if (!ppRecord) return E_POINTER;
+        *ppRecord = reinterpret_cast<void*>(0x88002);
+        return S_OK;
+    }
+    HRESULT GetWorkGraphMemoryRequirements(uint32_t ProgramIndex, void* pRequirements) override {
+        (void)ProgramIndex;
+        if (!pRequirements) return E_INVALIDARG;
+        *reinterpret_cast<uint64_t*>(pRequirements) = 65536ULL;
         return S_OK;
     }
     void CopyDescriptors(uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
