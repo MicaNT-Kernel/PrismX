@@ -5183,6 +5183,71 @@ int Test_PrismX_Official_D3D12_Device17_And_Options28_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_CommandList11_And_Options29_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_CommandList11_And_Options29_Architecture")
+
+    using namespace D3D12ComAbi;
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Check D3D12_OPTIONS29 Support
+    D3D12_FEATURE_DATA_D3D12_OPTIONS29_ABI opts29{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS29, &opts29, sizeof(opts29));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts29.WorkGraphsTier == 12u);
+    PRISMX_ASSERT(opts29.GPUUploadHeapSupported == 1);
+    PRISMX_ASSERT(opts29.DynamicDepthBiasClampSupported == 1);
+    PRISMX_ASSERT(opts29.BackingMemoryCustomPoolSupported == 1);
+    PRISMX_ASSERT(opts29.ComputeOnlyDeviceSupported == 1);
+
+    // 2. Instantiate Command Allocator and CommandList
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+
+    // 3. Query ID3D12GraphicsCommandList11 Interface
+    ID3D12GraphicsCommandList11* pCmdList11 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList11, reinterpret_cast<void**>(&pCmdList11));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList11 != nullptr);
+
+    ID3D12GraphicsCommandList11* pCanonical11 = nullptr;
+    hr = cmdList.QueryInterface(IID_ID3D12GraphicsCommandList11, reinterpret_cast<void**>(&pCanonical11));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCanonical11 != nullptr);
+    pCanonical11->Release();
+
+    // 4. Test SetWorkGraphBackingMemory
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory().StartAddress == 0);
+    D3D12_GPU_VIRTUAL_ADDRESS_RANGE range{};
+    range.StartAddress = 0x90000000ULL;
+    range.SizeInBytes  = 1048576;
+    pCmdList11->SetWorkGraphBackingMemory(&range);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory().StartAddress == 0x90000000ULL);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory().SizeInBytes == 1048576);
+
+    pCmdList11->SetWorkGraphBackingMemory(nullptr);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory().StartAddress == 0);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory().SizeInBytes == 0);
+
+    // 5. Test DispatchGraphProgramRecord
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecordCount() == 0);
+    uint32_t recordData = 0xFEEDFACE;
+    pCmdList11->DispatchGraphProgramRecord(3, &recordData);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecordCount() == 1);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords()[0].first == 3);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords()[0].second == &recordData);
+
+    // 6. Test Reset clears backing memory and records
+    pCmdList11->SetWorkGraphBackingMemory(&range);
+    cmdList.Reset(nullptr, nullptr);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory().StartAddress == 0);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecordCount() == 0);
+
+    pCmdList11->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -5249,9 +5314,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_DRED2_And_Options27_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device17_And_Options28_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_CommandList11_And_Options29_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (60/60)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (61/61)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

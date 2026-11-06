@@ -118,7 +118,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS25        = 64,
     D3D12_FEATURE_ABI_D3D12_OPTIONS26        = 65,
     D3D12_FEATURE_ABI_D3D12_OPTIONS27        = 66,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS28        = 67
+    D3D12_FEATURE_ABI_D3D12_OPTIONS28        = 67,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS29        = 68
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -350,6 +351,14 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS28_ABI {
     int32_t  ComputeOnlyDeviceSupported;               // 1 (TRUE)
     int32_t  IndependentSamplerMipLevelsSupported;     // 1 (TRUE)
     int32_t  UnboundedStreamOutputSupported;           // 1 (TRUE)
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS29_ABI {
+    uint32_t WorkGraphsTier;                           // 12u (Tier 1.2)
+    int32_t  GPUUploadHeapSupported;                   // 1 (TRUE)
+    int32_t  DynamicDepthBiasClampSupported;           // 1 (TRUE)
+    int32_t  BackingMemoryCustomPoolSupported;          // 1 (TRUE)
+    int32_t  ComputeOnlyDeviceSupported;               // 1 (TRUE)
 };
 
 enum D3D12_DRED_ENABLEMENT : uint32_t {
@@ -1126,6 +1135,16 @@ public:
                 o28->ComputeOnlyDeviceSupported           = 1;
                 o28->IndependentSamplerMipLevelsSupported = 1;
                 o28->UnboundedStreamOutputSupported       = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS29: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS29_ABI)) return E_INVALIDARG;
+                auto* o29 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS29_ABI*>(pData);
+                o29->WorkGraphsTier                    = 12u; // Tier 1.2
+                o29->GPUUploadHeapSupported            = 1;
+                o29->DynamicDepthBiasClampSupported    = 1;
+                o29->BackingMemoryCustomPoolSupported   = 1;
+                o29->ComputeOnlyDeviceSupported        = 1;
                 return S_OK;
             }
             default:

@@ -219,10 +219,24 @@ public:
 };
 
 // ============================================================================
+// ID3D12GraphicsCommandList11 (Work Graphs Backing Memory & Program Records)
+// ============================================================================
+
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList11 =
+    { 0x845f9da5, 0xe11a, 0x45c1, { 0x9d, 0xc5, 0xd3, 0x6c, 0x50, 0x7c, 0x39, 0x05 } };
+inline constexpr IID IID_ID3D12GraphicsCommandList11 = OFFICIAL_IID_ID3D12GraphicsCommandList11;
+
+class ID3D12GraphicsCommandList11 : public ID3D12GraphicsCommandList10 {
+public:
+    virtual void SetWorkGraphBackingMemory(const D3D12_GPU_VIRTUAL_ADDRESS_RANGE* pBackingMemory) = 0;
+    virtual void DispatchGraphProgramRecord(uint32_t NodeIndex, const void* pRecord) = 0;
+};
+
+// ============================================================================
 // 4. Concrete Implementation: Prism3D12GraphicsCommandList7Impl
 // ============================================================================
 
-class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList10 {
+class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList11 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ID3D12Device* m_pDevice{ nullptr };
@@ -245,6 +259,8 @@ private:
     D3D12_SET_PROGRAM_DESC m_activeProgramDesc{};
     bool m_hasActiveProgram{ false };
     std::vector<D3D12_DISPATCH_GRAPH_DESC> m_recordedDispatchGraphs;
+    D3D12_GPU_VIRTUAL_ADDRESS_RANGE m_backingMemory{};
+    std::vector<std::pair<uint32_t, const void*>> m_recordedProgramRecords;
 
     struct RecordedBarrierGroup {
         D3D12_BARRIER_TYPE type;
@@ -297,6 +313,11 @@ public:
             AddRef();
             return 0;
         }
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList11 || riid == IID_ID3D12GraphicsCommandList11) {
+            *ppv = static_cast<ID3D12GraphicsCommandList11*>(this);
+            AddRef();
+            return 0;
+        }
         *ppv = nullptr;
         return -2147467262;
     }
@@ -340,6 +361,8 @@ public:
         m_depthBiasClamp = 0.0f;
         m_slopeScaledDepthBias = 0.0f;
         m_ibStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+        m_backingMemory = {};
+        m_recordedProgramRecords.clear();
         m_isOpen = true;
         return 0;
     }
@@ -349,6 +372,8 @@ public:
         m_recordedBarriers.clear();
         m_recordedWriteBufferImmediates.clear();
         m_pProtectedSession = nullptr;
+        m_backingMemory = {};
+        m_recordedProgramRecords.clear();
     }
 
     void ResourceBarrier(uint32_t, const D3D12_RESOURCE_BARRIER*) override {}
@@ -471,10 +496,28 @@ public:
     D3D12_PROGRAM_TYPE GetActiveProgramType() const noexcept { return m_activeProgramDesc.Type; }
     size_t GetRecordedDispatchGraphCount() const noexcept { return m_recordedDispatchGraphs.size(); }
     const std::vector<D3D12_DISPATCH_GRAPH_DESC>& GetRecordedDispatchGraphs() const noexcept { return m_recordedDispatchGraphs; }
+
+    // ID3D12GraphicsCommandList11
+    void SetWorkGraphBackingMemory(const D3D12_GPU_VIRTUAL_ADDRESS_RANGE* pBackingMemory) override {
+        if (pBackingMemory) {
+            m_backingMemory = *pBackingMemory;
+        } else {
+            m_backingMemory = {};
+        }
+    }
+
+    void DispatchGraphProgramRecord(uint32_t NodeIndex, const void* pRecord) override {
+        m_recordedProgramRecords.push_back({ NodeIndex, pRecord });
+    }
+
+    const D3D12_GPU_VIRTUAL_ADDRESS_RANGE& GetWorkGraphBackingMemory() const noexcept { return m_backingMemory; }
+    size_t GetRecordedProgramRecordCount() const noexcept { return m_recordedProgramRecords.size(); }
+    const std::vector<std::pair<uint32_t, const void*>>& GetRecordedProgramRecords() const noexcept { return m_recordedProgramRecords; }
 };
 
 using Prism3D12GraphicsCommandList8Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList9Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList10Impl = Prism3D12GraphicsCommandList7Impl;
+using Prism3D12GraphicsCommandList11Impl = Prism3D12GraphicsCommandList7Impl;
 
 } // namespace prismx
