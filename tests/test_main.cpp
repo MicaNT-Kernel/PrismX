@@ -5148,6 +5148,41 @@ int Test_PrismX_Official_D3D12_DRED2_And_Options27_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_Device17_And_Options28_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Device17_And_Options28_Architecture")
+
+    using namespace D3D12ComAbi;
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Check D3D12_OPTIONS28 Support
+    D3D12_FEATURE_DATA_D3D12_OPTIONS28_ABI opts28{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS28, &opts28, sizeof(opts28));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts28.WorkGraphsTier == 12u);
+    PRISMX_ASSERT(opts28.ComputeOnlyDeviceSupported == 1);
+    PRISMX_ASSERT(opts28.IndependentSamplerMipLevelsSupported == 1);
+    PRISMX_ASSERT(opts28.UnboundedStreamOutputSupported == 1);
+
+    // 2. Query and Validate ID3D12Device17
+    ID3D12Device17* pDev17 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device17, reinterpret_cast<void**>(&pDev17));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev17 != nullptr);
+
+    void* pRec = nullptr;
+    hr = pDev17->CreateWorkGraphProgramRecord(nullptr, IID_IUnknown, &pRec);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pRec != nullptr);
+
+    hr = pDev17->SetWorkGraphProgramRecord(0, pRec);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    pDev17->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -5213,9 +5248,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_DRED2_And_Options27_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Device17_And_Options28_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (59/59)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (60/60)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
