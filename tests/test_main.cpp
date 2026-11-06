@@ -5065,6 +5065,89 @@ int Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_DRED2_And_Options27_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_DRED2_And_Options27_Architecture")
+
+    using namespace D3D12ComAbi;
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Check D3D12_OPTIONS27 Support
+    D3D12_FEATURE_DATA_D3D12_OPTIONS27_ABI opts27{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS27, &opts27, sizeof(opts27));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opts27.WorkGraphsTier == 11u);
+    PRISMX_ASSERT(opts27.DynamicNodeExpansionSupported == 1);
+    PRISMX_ASSERT(opts27.MultiTierWorkGraphsSupported == 1);
+    PRISMX_ASSERT(opts27.AmplifiedMeshDispatchSupported == 1);
+
+    // 2. Test D3D12GetInterface with CLSID_D3D12DeviceRemovedExtendedData
+    ID3D12DeviceRemovedExtendedDataSettings* pSettings = nullptr;
+    hr = D3D12GetInterfaceAbi(
+        OFFICIAL_CLSID_D3D12DeviceRemovedExtendedData,
+        OFFICIAL_IID_ID3D12DeviceRemovedExtendedDataSettings,
+        reinterpret_cast<void**>(&pSettings)
+    );
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pSettings != nullptr);
+
+    pSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    pSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    pSettings->SetWatsonDumpEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+
+    // Query ID3D12DeviceRemovedExtendedDataSettings1
+    ID3D12DeviceRemovedExtendedDataSettings1* pSettings1 = nullptr;
+    hr = pSettings->QueryInterface(
+        OFFICIAL_IID_ID3D12DeviceRemovedExtendedDataSettings1,
+        reinterpret_cast<void**>(&pSettings1)
+    );
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pSettings1 != nullptr);
+
+    pSettings1->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    auto* pConcreteSettings = static_cast<PrismD3D12DeviceRemovedExtendedDataSettingsImpl*>(pSettings1);
+    PRISMX_ASSERT(pConcreteSettings->GetAutoBreadcrumbsEnablement() == D3D12_DRED_ENABLEMENT_FORCED_ON);
+    PRISMX_ASSERT(pConcreteSettings->GetPageFaultEnablement() == D3D12_DRED_ENABLEMENT_FORCED_ON);
+    PRISMX_ASSERT(pConcreteSettings->GetBreadcrumbContextEnablement() == D3D12_DRED_ENABLEMENT_FORCED_ON);
+
+    pSettings1->Release();
+    pSettings->Release();
+
+    // 3. Query DRED Interfaces from Device
+    ID3D12DeviceRemovedExtendedData* pDred = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12DeviceRemovedExtendedData, reinterpret_cast<void**>(&pDred));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDred != nullptr);
+
+    D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT autoBreadcrumbs{};
+    hr = pDred->GetAutoBreadcrumbsOutput(&autoBreadcrumbs);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    D3D12_DRED_PAGE_FAULT_OUTPUT pageFault{};
+    hr = pDred->GetPageFaultAllocationOutput(&pageFault);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    pDred->Release();
+
+    // Query ID3D12DeviceRemovedExtendedData2
+    ID3D12DeviceRemovedExtendedData2* pDred2 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12DeviceRemovedExtendedData2, reinterpret_cast<void**>(&pDred2));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDred2 != nullptr);
+
+    D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 breadcrumbs1{};
+    hr = pDred2->GetAutoBreadcrumbsOutput1(&breadcrumbs1);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    D3D12_DRED_PAGE_FAULT_OUTPUT2 pageFault2{};
+    hr = pDred2->GetPageFaultAllocationOutput2(&pageFault2);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    PRISMX_ASSERT(pDred2->GetDeviceState() == D3D12_DRED_DEVICE_STATE_UNKNOWN);
+    pDred2->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
     std::cout << "========================================================\n";
@@ -5129,9 +5212,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device11_CreateSampler2_And_Options25() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device12_13_14_And_TryCreate_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device15_16_QueryHeap1_And_Options26_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_DRED2_And_Options27_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (58/58)    \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (59/59)    \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
