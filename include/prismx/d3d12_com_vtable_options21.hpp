@@ -55,6 +55,8 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device18 =
     { 0x77626941, 0xc68c, 0x4c67, { 0x91, 0x04, 0x58, 0x5b, 0x53, 0x77, 0xcf, 0xf8 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device19 =
     { 0x6c3e7b21, 0x51e2, 0x47b0, { 0x9c, 0x8a, 0x3e, 0x72, 0x91, 0xb5, 0x2a, 0x6e } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device20 =
+    { 0x51e2833f, 0x18f6, 0x4d69, { 0x93, 0x6e, 0xc4, 0x90, 0x32, 0x56, 0x88, 0x12 } };
 
 inline constexpr IID OFFICIAL_CLSID_D3D12DeviceRemovedExtendedData =
     { 0x5c7ca970, 0x8a92, 0x48a1, { 0x81, 0x4d, 0x45, 0x89, 0x61, 0x93, 0x22, 0x93 } };
@@ -125,7 +127,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS28        = 67,
     D3D12_FEATURE_ABI_D3D12_OPTIONS29        = 68,
     D3D12_FEATURE_ABI_D3D12_OPTIONS30        = 69,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS31        = 70
+    D3D12_FEATURE_ABI_D3D12_OPTIONS31        = 70,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS32        = 71
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -381,6 +384,14 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS31_ABI {
     int32_t  EnhancedWaveMatrixMultiplySupported;         // 1 (TRUE)
     uint32_t WaveMatrixMultiplyTiers;                     // 3 (Tier 3)
     int32_t  ProgrammaticWorkGraphRecordBindingSupported; // 1 (TRUE)
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS32_ABI {
+    uint32_t WorkGraphsTier;                              // 15u (Tier 2.2)
+    int32_t  DynamicGlobalRootSignatureSupported;         // 1 (TRUE)
+    int32_t  AsyncWorkGraphDispatchSupported;             // 1 (TRUE)
+    uint32_t MaxWorkGraphConcurrencyGroups;               // 64u
+    int32_t  EnhancedBarrierDynamicAliasingSupported;     // 1 (TRUE)
 };
 
 enum D3D12_DRED_ENABLEMENT : uint32_t {
@@ -787,6 +798,20 @@ public:
         int32_t* pSupported) = 0;
 };
 
+class ID3D12Device20 : public ID3D12Device19 {
+public:
+    virtual HRESULT CreateWorkGraphProgramRecord4(
+        const void* pDesc,
+        uint32_t Flags,
+        uint64_t NodeRecordStride,
+        uint32_t MaxConcurrency,
+        const IID& riid,
+        void** ppRecord) = 0;
+
+    virtual HRESULT GetWorkGraphGlobalRootSignatureSupport(
+        int32_t* pSupported) = 0;
+};
+
 class PrismD3D12DeviceRemovedExtendedDataSettingsImpl : public ID3D12DeviceRemovedExtendedDataSettings1 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
@@ -885,7 +910,7 @@ public:
     }
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12Device19 {
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device20 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -916,8 +941,9 @@ public:
             riid == OFFICIAL_IID_ID3D12Device16 ||
             riid == OFFICIAL_IID_ID3D12Device17 ||
             riid == OFFICIAL_IID_ID3D12Device18 ||
-            riid == OFFICIAL_IID_ID3D12Device19) {
-            *ppv = static_cast<ID3D12Device19*>(this);
+            riid == OFFICIAL_IID_ID3D12Device19 ||
+            riid == OFFICIAL_IID_ID3D12Device20) {
+            *ppv = static_cast<ID3D12Device20*>(this);
             AddRef();
             return S_OK;
         }
@@ -1217,6 +1243,16 @@ public:
                 o31->ProgrammaticWorkGraphRecordBindingSupported = 1;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS32: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS32_ABI)) return E_INVALIDARG;
+                auto* o32 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS32_ABI*>(pData);
+                o32->WorkGraphsTier                          = 15u; // Tier 2.2
+                o32->DynamicGlobalRootSignatureSupported     = 1;
+                o32->AsyncWorkGraphDispatchSupported         = 1;
+                o32->MaxWorkGraphConcurrencyGroups           = 64u;
+                o32->EnhancedBarrierDynamicAliasingSupported = 1;
+                return S_OK;
+            }
             default:
                 std::memset(pData, 0, Size);
                 return S_OK;
@@ -1387,6 +1423,17 @@ public:
         return S_OK;
     }
     HRESULT GetDynamicDepthBoundsSupport(int32_t* pSupported) override {
+        if (!pSupported) return E_INVALIDARG;
+        *pSupported = 1;
+        return S_OK;
+    }
+    HRESULT CreateWorkGraphProgramRecord4(const void* pDesc, uint32_t Flags, uint64_t NodeRecordStride, uint32_t MaxConcurrency, const IID& riid, void** ppRecord) override {
+        (void)pDesc; (void)Flags; (void)NodeRecordStride; (void)MaxConcurrency; (void)riid;
+        if (!ppRecord) return E_POINTER;
+        *ppRecord = reinterpret_cast<void*>(0x88004);
+        return S_OK;
+    }
+    HRESULT GetWorkGraphGlobalRootSignatureSupport(int32_t* pSupported) override {
         if (!pSupported) return E_INVALIDARG;
         *pSupported = 1;
         return S_OK;
