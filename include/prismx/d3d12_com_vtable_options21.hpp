@@ -59,6 +59,8 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device20 =
     { 0x51e2833f, 0x18f6, 0x4d69, { 0x93, 0x6e, 0xc4, 0x90, 0x32, 0x56, 0x88, 0x12 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device21 =
     { 0x48a0f983, 0x9320, 0x4f4d, { 0xa5, 0x0f, 0x27, 0x05, 0x6e, 0x24, 0x33, 0x2e } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device22 =
+    { 0x87a13c90, 0xb214, 0x4e61, { 0x8f, 0x22, 0xa1, 0x14, 0x9b, 0x33, 0x5a, 0x7c } };
 
 inline constexpr IID OFFICIAL_CLSID_D3D12DeviceRemovedExtendedData =
     { 0x5c7ca970, 0x8a92, 0x48a1, { 0x81, 0x4d, 0x45, 0x89, 0x61, 0x93, 0x22, 0x93 } };
@@ -131,7 +133,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS30        = 69,
     D3D12_FEATURE_ABI_D3D12_OPTIONS31        = 70,
     D3D12_FEATURE_ABI_D3D12_OPTIONS32        = 71,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS33        = 72
+    D3D12_FEATURE_ABI_D3D12_OPTIONS33        = 72,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS34        = 73
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -403,6 +406,14 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS33_ABI {
     int32_t  DynamicNodeExpansionSupported;                 // 1 (TRUE)
     uint32_t MaxWorkGraphConcurrencyGroups;                // 128u
     int32_t  WaveMatrixMultiplyAccumulateSupported;         // 1 (TRUE)
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS34_ABI {
+    uint32_t WorkGraphsTier;                                // 17u (Tier 3.1)
+    int32_t  CooperativeMatrixMultiplySupported;           // 1 (TRUE)
+    int32_t  MultiQueueWorkGraphDispatchSupported;          // 1 (TRUE)
+    int32_t  DynamicClusterExpansionSupported;              // 1 (TRUE)
+    uint32_t MaxWorkGraphConcurrencyGroups;                // 256u
 };
 
 enum D3D12_DRED_ENABLEMENT : uint32_t {
@@ -838,6 +849,23 @@ public:
         int32_t* pSupported) = 0;
 };
 
+class ID3D12Device22 : public ID3D12Device21 {
+public:
+    virtual HRESULT CreateWorkGraphProgramRecord6(
+        const void* pDesc,
+        uint32_t Flags,
+        uint64_t NodeRecordStride,
+        uint32_t MaxConcurrency,
+        uint32_t AllocationTier,
+        uint32_t CooperativeMatrixFlags,
+        const IID& riid,
+        void** ppRecord) = 0;
+
+    virtual HRESULT GetWorkGraphCooperativeMatrixSupport(
+        int32_t* pSupported,
+        uint32_t* pMaxMatrixDim) = 0;
+};
+
 class PrismD3D12DeviceRemovedExtendedDataSettingsImpl : public ID3D12DeviceRemovedExtendedDataSettings1 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
@@ -936,7 +964,7 @@ public:
     }
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12Device21 {
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device22 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -969,8 +997,9 @@ public:
             riid == OFFICIAL_IID_ID3D12Device18 ||
             riid == OFFICIAL_IID_ID3D12Device19 ||
             riid == OFFICIAL_IID_ID3D12Device20 ||
-            riid == OFFICIAL_IID_ID3D12Device21) {
-            *ppv = static_cast<ID3D12Device21*>(this);
+            riid == OFFICIAL_IID_ID3D12Device21 ||
+            riid == OFFICIAL_IID_ID3D12Device22) {
+            *ppv = static_cast<ID3D12Device22*>(this);
             AddRef();
             return S_OK;
         }
@@ -1290,6 +1319,16 @@ public:
                 o33->WaveMatrixMultiplyAccumulateSupported  = 1;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS34: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS34_ABI)) return E_INVALIDARG;
+                auto* o34 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS34_ABI*>(pData);
+                o34->WorkGraphsTier                         = 17u; // Tier 3.1
+                o34->CooperativeMatrixMultiplySupported     = 1;
+                o34->MultiQueueWorkGraphDispatchSupported   = 1;
+                o34->DynamicClusterExpansionSupported       = 1;
+                o34->MaxWorkGraphConcurrencyGroups          = 256u;
+                return S_OK;
+            }
             default:
                 std::memset(pData, 0, Size);
                 return S_OK;
@@ -1484,6 +1523,18 @@ public:
     HRESULT GetWorkGraphAutonomousAllocationSupport(int32_t* pSupported) override {
         if (!pSupported) return E_INVALIDARG;
         *pSupported = 1;
+        return S_OK;
+    }
+    HRESULT CreateWorkGraphProgramRecord6(const void* pDesc, uint32_t Flags, uint64_t NodeRecordStride, uint32_t MaxConcurrency, uint32_t AllocationTier, uint32_t CooperativeMatrixFlags, const IID& riid, void** ppRecord) override {
+        (void)pDesc; (void)Flags; (void)NodeRecordStride; (void)MaxConcurrency; (void)AllocationTier; (void)CooperativeMatrixFlags; (void)riid;
+        if (!ppRecord) return E_POINTER;
+        *ppRecord = reinterpret_cast<void*>(0x88006);
+        return S_OK;
+    }
+    HRESULT GetWorkGraphCooperativeMatrixSupport(int32_t* pSupported, uint32_t* pMaxMatrixDim) override {
+        if (!pSupported || !pMaxMatrixDim) return E_INVALIDARG;
+        *pSupported = 1;
+        *pMaxMatrixDim = 64;
         return S_OK;
     }
     void CopyDescriptors(uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
