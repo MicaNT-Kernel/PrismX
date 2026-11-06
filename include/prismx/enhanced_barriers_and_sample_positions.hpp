@@ -254,10 +254,33 @@ public:
 };
 
 // ============================================================================
+// ID3D12GraphicsCommandList13 (Work Graphs 2.1 Backing Memory & Program Record Dispatch)
+// ============================================================================
+
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList13 =
+    { 0x8a2c17d4, 0x73b9, 0x4d01, { 0x91, 0x4f, 0x82, 0xd4, 0xe5, 0x36, 0x2c, 0x91 } };
+inline constexpr IID IID_ID3D12GraphicsCommandList13 = OFFICIAL_IID_ID3D12GraphicsCommandList13;
+
+class ID3D12GraphicsCommandList13 : public ID3D12GraphicsCommandList12 {
+public:
+    virtual void SetWorkGraphBackingMemory3(
+        D3D12_GPU_VIRTUAL_ADDRESS RangeStart,
+        uint64_t RangeSizeInBytes,
+        uint64_t ScratchBufferSizeInBytes,
+        uint32_t Flags) = 0;
+
+    virtual void DispatchGraphProgramRecord3(
+        uint32_t NodeIndex,
+        const void* pRecord,
+        uint32_t RecordSizeInBytes,
+        uint32_t RecordCount) = 0;
+};
+
+// ============================================================================
 // 4. Concrete Implementation: Prism3D12GraphicsCommandList7Impl
 // ============================================================================
 
-class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList12 {
+class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList13 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ID3D12Device* m_pDevice{ nullptr };
@@ -296,6 +319,22 @@ private:
         uint32_t RecordSizeInBytes{ 0 };
     };
     std::vector<ProgramRecord2Entry> m_recordedProgramRecords2;
+
+    struct BackingMemory3Record {
+        D3D12_GPU_VIRTUAL_ADDRESS RangeStart{ 0 };
+        uint64_t RangeSizeInBytes{ 0 };
+        uint64_t ScratchBufferSizeInBytes{ 0 };
+        uint32_t Flags{ 0 };
+    };
+    BackingMemory3Record m_backingMemory3{};
+
+    struct ProgramRecord3Entry {
+        uint32_t NodeIndex{ 0 };
+        const void* pRecord{ nullptr };
+        uint32_t RecordSizeInBytes{ 0 };
+        uint32_t RecordCount{ 0 };
+    };
+    std::vector<ProgramRecord3Entry> m_recordedProgramRecords3;
 
     struct RecordedBarrierGroup {
         D3D12_BARRIER_TYPE type;
@@ -358,6 +397,11 @@ public:
             AddRef();
             return 0;
         }
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList13 || riid == IID_ID3D12GraphicsCommandList13) {
+            *ppv = static_cast<ID3D12GraphicsCommandList13*>(this);
+            AddRef();
+            return 0;
+        }
         *ppv = nullptr;
         return -2147467262;
     }
@@ -405,6 +449,8 @@ public:
         m_recordedProgramRecords.clear();
         m_backingMemory2 = {};
         m_recordedProgramRecords2.clear();
+        m_backingMemory3 = {};
+        m_recordedProgramRecords3.clear();
         m_isOpen = true;
         return 0;
     }
@@ -418,6 +464,8 @@ public:
         m_recordedProgramRecords.clear();
         m_backingMemory2 = {};
         m_recordedProgramRecords2.clear();
+        m_backingMemory3 = {};
+        m_recordedProgramRecords3.clear();
     }
 
     void ResourceBarrier(uint32_t, const D3D12_RESOURCE_BARRIER*) override {}
@@ -570,6 +618,19 @@ public:
     const BackingMemory2Record& GetWorkGraphBackingMemory2() const noexcept { return m_backingMemory2; }
     size_t GetRecordedProgramRecord2Count() const noexcept { return m_recordedProgramRecords2.size(); }
     const std::vector<ProgramRecord2Entry>& GetRecordedProgramRecords2() const noexcept { return m_recordedProgramRecords2; }
+
+    // ID3D12GraphicsCommandList13
+    void SetWorkGraphBackingMemory3(D3D12_GPU_VIRTUAL_ADDRESS RangeStart, uint64_t RangeSizeInBytes, uint64_t ScratchBufferSizeInBytes, uint32_t Flags) override {
+        m_backingMemory3 = { RangeStart, RangeSizeInBytes, ScratchBufferSizeInBytes, Flags };
+    }
+
+    void DispatchGraphProgramRecord3(uint32_t NodeIndex, const void* pRecord, uint32_t RecordSizeInBytes, uint32_t RecordCount) override {
+        m_recordedProgramRecords3.push_back({ NodeIndex, pRecord, RecordSizeInBytes, RecordCount });
+    }
+
+    const BackingMemory3Record& GetWorkGraphBackingMemory3() const noexcept { return m_backingMemory3; }
+    size_t GetRecordedProgramRecord3Count() const noexcept { return m_recordedProgramRecords3.size(); }
+    const std::vector<ProgramRecord3Entry>& GetRecordedProgramRecords3() const noexcept { return m_recordedProgramRecords3; }
 };
 
 using Prism3D12GraphicsCommandList8Impl = Prism3D12GraphicsCommandList7Impl;
@@ -577,5 +638,6 @@ using Prism3D12GraphicsCommandList9Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList10Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList11Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList12Impl = Prism3D12GraphicsCommandList7Impl;
+using Prism3D12GraphicsCommandList13Impl = Prism3D12GraphicsCommandList7Impl;
 
 } // namespace prismx

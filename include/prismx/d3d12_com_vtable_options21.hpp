@@ -53,6 +53,8 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device17 =
     { 0x8e89f81d, 0x6663, 0x455b, { 0xb9, 0xd9, 0x0b, 0x79, 0x37, 0x5e, 0x11, 0x04 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device18 =
     { 0x77626941, 0xc68c, 0x4c67, { 0x91, 0x04, 0x58, 0x5b, 0x53, 0x77, 0xcf, 0xf8 } };
+inline constexpr IID OFFICIAL_IID_ID3D12Device19 =
+    { 0x6c3e7b21, 0x51e2, 0x47b0, { 0x9c, 0x8a, 0x3e, 0x72, 0x91, 0xb5, 0x2a, 0x6e } };
 
 inline constexpr IID OFFICIAL_CLSID_D3D12DeviceRemovedExtendedData =
     { 0x5c7ca970, 0x8a92, 0x48a1, { 0x81, 0x4d, 0x45, 0x89, 0x61, 0x93, 0x22, 0x93 } };
@@ -122,7 +124,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS27        = 66,
     D3D12_FEATURE_ABI_D3D12_OPTIONS28        = 67,
     D3D12_FEATURE_ABI_D3D12_OPTIONS29        = 68,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS30        = 69
+    D3D12_FEATURE_ABI_D3D12_OPTIONS30        = 69,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS31        = 70
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -370,6 +373,14 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS30_ABI {
     int32_t  DirectProgramRecordAllocationSupported;      // 1 (TRUE)
     int32_t  WorkGraphBackingMemoryVirtualRemapSupported; // 1 (TRUE)
     int32_t  ShaderExecutionReorderingSupported;          // 1 (TRUE)
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS31_ABI {
+    uint32_t WorkGraphsTier;                              // 14u (Tier 2.0/2.1)
+    int32_t  DynamicDepthBoundsSupported;                 // 1 (TRUE)
+    int32_t  EnhancedWaveMatrixMultiplySupported;         // 1 (TRUE)
+    uint32_t WaveMatrixMultiplyTiers;                     // 3 (Tier 3)
+    int32_t  ProgrammaticWorkGraphRecordBindingSupported; // 1 (TRUE)
 };
 
 enum D3D12_DRED_ENABLEMENT : uint32_t {
@@ -763,6 +774,19 @@ public:
         void* pRequirements) = 0;
 };
 
+class ID3D12Device19 : public ID3D12Device18 {
+public:
+    virtual HRESULT CreateWorkGraphProgramRecord3(
+        const void* pDesc,
+        uint32_t Flags,
+        uint64_t ScratchBufferSize,
+        const IID& riid,
+        void** ppRecord) = 0;
+
+    virtual HRESULT GetDynamicDepthBoundsSupport(
+        int32_t* pSupported) = 0;
+};
+
 class PrismD3D12DeviceRemovedExtendedDataSettingsImpl : public ID3D12DeviceRemovedExtendedDataSettings1 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
@@ -861,7 +885,7 @@ public:
     }
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12Device18 {
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device19 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -891,8 +915,9 @@ public:
             riid == OFFICIAL_IID_ID3D12Device15 ||
             riid == OFFICIAL_IID_ID3D12Device16 ||
             riid == OFFICIAL_IID_ID3D12Device17 ||
-            riid == OFFICIAL_IID_ID3D12Device18) {
-            *ppv = static_cast<ID3D12Device18*>(this);
+            riid == OFFICIAL_IID_ID3D12Device18 ||
+            riid == OFFICIAL_IID_ID3D12Device19) {
+            *ppv = static_cast<ID3D12Device19*>(this);
             AddRef();
             return S_OK;
         }
@@ -1182,6 +1207,16 @@ public:
                 o30->ShaderExecutionReorderingSupported          = 1;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS31: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS31_ABI)) return E_INVALIDARG;
+                auto* o31 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS31_ABI*>(pData);
+                o31->WorkGraphsTier                              = 14u; // Tier 2.0/2.1
+                o31->DynamicDepthBoundsSupported                 = 1;
+                o31->EnhancedWaveMatrixMultiplySupported         = 1;
+                o31->WaveMatrixMultiplyTiers                     = 3u; // Tier 3
+                o31->ProgrammaticWorkGraphRecordBindingSupported = 1;
+                return S_OK;
+            }
             default:
                 std::memset(pData, 0, Size);
                 return S_OK;
@@ -1343,6 +1378,17 @@ public:
         (void)ProgramIndex;
         if (!pRequirements) return E_INVALIDARG;
         *reinterpret_cast<uint64_t*>(pRequirements) = 65536ULL;
+        return S_OK;
+    }
+    HRESULT CreateWorkGraphProgramRecord3(const void* pDesc, uint32_t Flags, uint64_t ScratchBufferSize, const IID& riid, void** ppRecord) override {
+        (void)pDesc; (void)Flags; (void)ScratchBufferSize; (void)riid;
+        if (!ppRecord) return E_POINTER;
+        *ppRecord = reinterpret_cast<void*>(0x88003);
+        return S_OK;
+    }
+    HRESULT GetDynamicDepthBoundsSupport(int32_t* pSupported) override {
+        if (!pSupported) return E_INVALIDARG;
+        *pSupported = 1;
         return S_OK;
     }
     void CopyDescriptors(uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
