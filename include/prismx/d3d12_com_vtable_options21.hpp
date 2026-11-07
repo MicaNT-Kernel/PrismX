@@ -81,6 +81,9 @@ inline constexpr IID IID_ID3D12Device27 = OFFICIAL_IID_ID3D12Device27;
 inline constexpr IID OFFICIAL_IID_ID3D12Device28 =
     { 0xe4654bf1, 0x9df1, 0x44b2, { 0x9b, 0x15, 0x4d, 0x01, 0x17, 0xfd, 0x28, 0x48 } };
 inline constexpr IID IID_ID3D12Device28 = OFFICIAL_IID_ID3D12Device28;
+inline constexpr IID OFFICIAL_IID_ID3D12Device29 =
+    { 0xf5765c02, 0xae02, 0x45c3, { 0xac, 0x26, 0x5e, 0x12, 0x28, 0x0e, 0x39, 0x59 } };
+inline constexpr IID IID_ID3D12Device29 = OFFICIAL_IID_ID3D12Device29;
 
 inline constexpr IID OFFICIAL_CLSID_D3D12DeviceRemovedExtendedData =
     { 0x5c7ca970, 0x8a92, 0x48a1, { 0x81, 0x4d, 0x45, 0x89, 0x61, 0x93, 0x22, 0x93 } };
@@ -160,7 +163,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS37        = 76,
     D3D12_FEATURE_ABI_D3D12_OPTIONS38        = 77,
     D3D12_FEATURE_ABI_D3D12_OPTIONS39        = 78,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS40        = 79
+    D3D12_FEATURE_ABI_D3D12_OPTIONS40        = 79,
+    D3D12_FEATURE_ABI_D3D12_OPTIONS41        = 80
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -497,6 +501,18 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS40_ABI {
     uint32_t TilePipeliningStagesSupported;                 // 32u
     int32_t  AutonomousGraphRecursionSupported;             // 1 (TRUE)
     int32_t  AsynchronousTensorPipelineFusionSupported;     // 1 (TRUE)
+};
+
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS41_ABI {
+    uint32_t WorkGraphsTier;                                // 24u (Tier 3.8)
+    int32_t  CooperativeMatrixMultiply8192Supported;        // 1 (TRUE)
+    int32_t  SubByteMicroscalingTensorFormatsV4Supported;   // 1 (TRUE) (MXFP8/MXFP4/MXFP2/MXINT2)
+    int32_t  DynamicClusterExpansionTier9Supported;         // 1 (TRUE)
+    uint32_t MaxWorkGraphConcurrencyGroups;                 // 32768u
+    uint32_t TilePipeliningStagesSupported;                 // 64u
+    int32_t  AutonomousGraphRecursionSupported;             // 1 (TRUE)
+    int32_t  AsynchronousTensorPipelineFusionSupported;     // 1 (TRUE)
+    int32_t  WorkGraphMeshShaderPipeliningSupported;        // 1 (TRUE)
 };
 
 enum D3D12_DRED_ENABLEMENT : uint32_t {
@@ -1087,6 +1103,36 @@ public:
         int32_t* pSubGraphRecursion) = 0;
 };
 
+class ID3D12Device29 : public ID3D12Device28 {
+public:
+    virtual HRESULT CreateWorkGraphProgramRecord13(
+        const void* pDesc,
+        uint32_t Flags,
+        uint64_t NodeRecordStride,
+        uint32_t MaxConcurrency,
+        uint32_t DynamicExpansionFlags,
+        uint32_t MemoryPoolTier,
+        uint32_t TensorExpansionTier,
+        uint32_t SubAllocationMask,
+        uint32_t PipelineCoherencyTier,
+        uint32_t FeedbackLoopTier,
+        uint32_t SubGraphRecursionTier,
+        uint32_t MeshPipeliningTier,
+        const IID& riid,
+        void** ppRecord) = 0;
+
+    virtual HRESULT GetWorkGraphCooperativeMatrixSupport8(
+        int32_t* pSupported,
+        uint32_t* pMaxMatrixDimension,
+        uint32_t* pSupportedDataTypes,
+        uint32_t* pSparseAcceleration,
+        int32_t* pAsyncAccumulation,
+        uint32_t* pMaxTilePipeliningStages,
+        int32_t* pAutonomousFeedbackLoops,
+        int32_t* pSubGraphRecursion,
+        int32_t* pMeshShaderPipelining) = 0;
+};
+
 class PrismD3D12DeviceRemovedExtendedDataSettingsImpl : public ID3D12DeviceRemovedExtendedDataSettings1 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
@@ -1185,7 +1231,7 @@ public:
     }
 };
 
-class PrismD3D12Device14CanonicalImpl : public ID3D12Device28 {
+class PrismD3D12Device14CanonicalImpl : public ID3D12Device29 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
@@ -1230,8 +1276,10 @@ public:
             riid == OFFICIAL_IID_ID3D12Device27 ||
             riid == IID_ID3D12Device27 ||
             riid == OFFICIAL_IID_ID3D12Device28 ||
-            riid == IID_ID3D12Device28) {
-            *ppv = static_cast<ID3D12Device28*>(this);
+            riid == IID_ID3D12Device28 ||
+            riid == OFFICIAL_IID_ID3D12Device29 ||
+            riid == IID_ID3D12Device29) {
+            *ppv = static_cast<ID3D12Device29*>(this);
             AddRef();
             return S_OK;
         }
@@ -1630,6 +1678,20 @@ public:
                 o40->AsynchronousTensorPipelineFusionSupported      = 1;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_D3D12_OPTIONS41: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS41_ABI)) return E_INVALIDARG;
+                auto* o41 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS41_ABI*>(pData);
+                o41->WorkGraphsTier                                 = 24u; // Tier 3.8
+                o41->CooperativeMatrixMultiply8192Supported         = 1;
+                o41->SubByteMicroscalingTensorFormatsV4Supported    = 1;
+                o41->DynamicClusterExpansionTier9Supported          = 1;
+                o41->MaxWorkGraphConcurrencyGroups                  = 32768u;
+                o41->TilePipeliningStagesSupported                  = 64u;
+                o41->AutonomousGraphRecursionSupported              = 1;
+                o41->AsynchronousTensorPipelineFusionSupported      = 1;
+                o41->WorkGraphMeshShaderPipeliningSupported         = 1;
+                return S_OK;
+            }
             default:
                 std::memset(pData, 0, Size);
                 return S_OK;
@@ -1929,6 +1991,25 @@ public:
         if (pMaxTilePipeliningStages) *pMaxTilePipeliningStages = 32;
         if (pAutonomousFeedbackLoops) *pAutonomousFeedbackLoops = 1;
         if (pSubGraphRecursion) *pSubGraphRecursion = 1;
+        return S_OK;
+    }
+    HRESULT CreateWorkGraphProgramRecord13(const void* pDesc, uint32_t Flags, uint64_t NodeRecordStride, uint32_t MaxConcurrency, uint32_t DynamicExpansionFlags, uint32_t MemoryPoolTier, uint32_t TensorExpansionTier, uint32_t SubAllocationMask, uint32_t PipelineCoherencyTier, uint32_t FeedbackLoopTier, uint32_t SubGraphRecursionTier, uint32_t MeshPipeliningTier, const IID& riid, void** ppRecord) override {
+        (void)pDesc; (void)Flags; (void)NodeRecordStride; (void)MaxConcurrency; (void)DynamicExpansionFlags; (void)MemoryPoolTier; (void)TensorExpansionTier; (void)SubAllocationMask; (void)PipelineCoherencyTier; (void)FeedbackLoopTier; (void)SubGraphRecursionTier; (void)MeshPipeliningTier; (void)riid;
+        if (!ppRecord) return E_POINTER;
+        *ppRecord = reinterpret_cast<void*>(0x88013);
+        return S_OK;
+    }
+    HRESULT GetWorkGraphCooperativeMatrixSupport8(int32_t* pSupported, uint32_t* pMaxMatrixDim, uint32_t* pSupportedDataTypes, uint32_t* pSparseAcceleration, int32_t* pAsyncAccumulation, uint32_t* pMaxTilePipeliningStages, int32_t* pAutonomousFeedbackLoops, int32_t* pSubGraphRecursion, int32_t* pMeshShaderPipelining) override {
+        if (!pSupported) return E_INVALIDARG;
+        *pSupported = 1;
+        if (pMaxMatrixDim) *pMaxMatrixDim = 8192;
+        if (pSupportedDataTypes) *pSupportedDataTypes = 0x1FF; // FP16 | BF16 | FP8 | INT8 | FP4 | MXFP6 | MXFP4 | MXINT4 | MXINT2
+        if (pSparseAcceleration) *pSparseAcceleration = 1;
+        if (pAsyncAccumulation) *pAsyncAccumulation = 1;
+        if (pMaxTilePipeliningStages) *pMaxTilePipeliningStages = 64;
+        if (pAutonomousFeedbackLoops) *pAutonomousFeedbackLoops = 1;
+        if (pSubGraphRecursion) *pSubGraphRecursion = 1;
+        if (pMeshShaderPipelining) *pMeshShaderPipelining = 1;
         return S_OK;
     }
     void CopyDescriptors(uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, uint32_t, const D3D12_CPU_DESCRIPTOR_HANDLE*, const uint32_t*, D3D12_DESCRIPTOR_HEAP_TYPE) override {}
