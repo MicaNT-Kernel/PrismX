@@ -454,10 +454,46 @@ public:
 };
 
 // ============================================================================
+// ID3D12GraphicsCommandList20 (Work Graphs 3.5 1024x1024 Cooperative Matrix, MXFP6/MXFP4 & Concurrency 4096)
+// ============================================================================
+
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList20 =
+    { 0x166ca834, 0x6439, 0x4015, { 0xbb, 0xda, 0x0e, 0x28, 0x9e, 0xd6, 0x59, 0x1d } };
+inline constexpr IID IID_ID3D12GraphicsCommandList20 = OFFICIAL_IID_ID3D12GraphicsCommandList20;
+
+class ID3D12GraphicsCommandList20 : public ID3D12GraphicsCommandList19 {
+public:
+    virtual void SetWorkGraphBackingMemory10(
+        D3D12_GPU_VIRTUAL_ADDRESS RangeStart,
+        uint64_t RangeSizeInBytes,
+        uint64_t ScratchBufferSizeInBytes,
+        uint32_t MaxConcurrency,
+        uint32_t DynamicExpansionFlags,
+        uint32_t MemoryPoolTier,
+        uint32_t SparsityMask,
+        uint32_t SubAllocationMask,
+        uint32_t PipelineCoherencyTier,
+        uint32_t Flags) = 0;
+
+    virtual void DispatchGraphProgramRecord10(
+        uint32_t NodeIndex,
+        const void* pRecord,
+        uint32_t RecordSizeInBytes,
+        uint32_t ConcurrencyGroup,
+        uint32_t QueueAffinityMask,
+        uint32_t DynamicClusterExpansionTier,
+        uint32_t TensorCoreMask,
+        uint32_t SubAllocationMask,
+        uint32_t PipelineCoherencyTier,
+        uint32_t DispatchMask,
+        uint32_t DispatchFlags) = 0;
+};
+
+// ============================================================================
 // 4. Concrete Implementation: Prism3D12GraphicsCommandList7Impl
 // ============================================================================
 
-class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList19 {
+class Prism3D12GraphicsCommandList7Impl : public ID3D12GraphicsCommandList20 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ID3D12Device* m_pDevice{ nullptr };
@@ -648,6 +684,35 @@ private:
     };
     std::vector<ProgramRecord9Entry> m_recordedProgramRecords9;
 
+    struct BackingMemory10Record {
+        D3D12_GPU_VIRTUAL_ADDRESS RangeStart{ 0 };
+        uint64_t RangeSizeInBytes{ 0 };
+        uint64_t ScratchBufferSizeInBytes{ 0 };
+        uint32_t MaxConcurrency{ 0 };
+        uint32_t DynamicExpansionFlags{ 0 };
+        uint32_t MemoryPoolTier{ 0 };
+        uint32_t SparsityMask{ 0 };
+        uint32_t SubAllocationMask{ 0 };
+        uint32_t PipelineCoherencyTier{ 0 };
+        uint32_t Flags{ 0 };
+    };
+    BackingMemory10Record m_backingMemory10{};
+
+    struct ProgramRecord10Entry {
+        uint32_t NodeIndex{ 0 };
+        const void* pRecord{ nullptr };
+        uint32_t RecordSizeInBytes{ 0 };
+        uint32_t ConcurrencyGroup{ 0 };
+        uint32_t QueueAffinityMask{ 0 };
+        uint32_t DynamicClusterExpansionTier{ 0 };
+        uint32_t TensorCoreMask{ 0 };
+        uint32_t SubAllocationMask{ 0 };
+        uint32_t PipelineCoherencyTier{ 0 };
+        uint32_t DispatchMask{ 0 };
+        uint32_t DispatchFlags{ 0 };
+    };
+    std::vector<ProgramRecord10Entry> m_recordedProgramRecords10;
+
     struct RecordedBarrierGroup {
         D3D12_BARRIER_TYPE type;
         uint32_t count;
@@ -744,6 +809,11 @@ public:
             AddRef();
             return 0;
         }
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList20 || riid == IID_ID3D12GraphicsCommandList20) {
+            *ppv = static_cast<ID3D12GraphicsCommandList20*>(this);
+            AddRef();
+            return 0;
+        }
         *ppv = nullptr;
         return -2147467262;
     }
@@ -805,6 +875,8 @@ public:
         m_recordedProgramRecords8.clear();
         m_backingMemory9 = {};
         m_recordedProgramRecords9.clear();
+        m_backingMemory10 = {};
+        m_recordedProgramRecords10.clear();
         m_isOpen = true;
         return 0;
     }
@@ -832,6 +904,8 @@ public:
         m_recordedProgramRecords8.clear();
         m_backingMemory9 = {};
         m_recordedProgramRecords9.clear();
+        m_backingMemory10 = {};
+        m_recordedProgramRecords10.clear();
     }
 
     void ResourceBarrier(uint32_t, const D3D12_RESOURCE_BARRIER*) override {}
@@ -1075,6 +1149,19 @@ public:
     const BackingMemory9Record& GetWorkGraphBackingMemory9() const noexcept { return m_backingMemory9; }
     size_t GetRecordedProgramRecord9Count() const noexcept { return m_recordedProgramRecords9.size(); }
     const std::vector<ProgramRecord9Entry>& GetRecordedProgramRecords9() const noexcept { return m_recordedProgramRecords9; }
+
+    // ID3D12GraphicsCommandList20
+    void SetWorkGraphBackingMemory10(D3D12_GPU_VIRTUAL_ADDRESS RangeStart, uint64_t RangeSizeInBytes, uint64_t ScratchBufferSizeInBytes, uint32_t MaxConcurrency, uint32_t DynamicExpansionFlags, uint32_t MemoryPoolTier, uint32_t SparsityMask, uint32_t SubAllocationMask, uint32_t PipelineCoherencyTier, uint32_t Flags) override {
+        m_backingMemory10 = { RangeStart, RangeSizeInBytes, ScratchBufferSizeInBytes, MaxConcurrency, DynamicExpansionFlags, MemoryPoolTier, SparsityMask, SubAllocationMask, PipelineCoherencyTier, Flags };
+    }
+
+    void DispatchGraphProgramRecord10(uint32_t NodeIndex, const void* pRecord, uint32_t RecordSizeInBytes, uint32_t ConcurrencyGroup, uint32_t QueueAffinityMask, uint32_t DynamicClusterExpansionTier, uint32_t TensorCoreMask, uint32_t SubAllocationMask, uint32_t PipelineCoherencyTier, uint32_t DispatchMask, uint32_t DispatchFlags) override {
+        m_recordedProgramRecords10.push_back({ NodeIndex, pRecord, RecordSizeInBytes, ConcurrencyGroup, QueueAffinityMask, DynamicClusterExpansionTier, TensorCoreMask, SubAllocationMask, PipelineCoherencyTier, DispatchMask, DispatchFlags });
+    }
+
+    const BackingMemory10Record& GetWorkGraphBackingMemory10() const noexcept { return m_backingMemory10; }
+    size_t GetRecordedProgramRecord10Count() const noexcept { return m_recordedProgramRecords10.size(); }
+    const std::vector<ProgramRecord10Entry>& GetRecordedProgramRecords10() const noexcept { return m_recordedProgramRecords10; }
 };
 
 using Prism3D12GraphicsCommandList8Impl = Prism3D12GraphicsCommandList7Impl;
@@ -1089,5 +1176,6 @@ using Prism3D12GraphicsCommandList16Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList17Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList18Impl = Prism3D12GraphicsCommandList7Impl;
 using Prism3D12GraphicsCommandList19Impl = Prism3D12GraphicsCommandList7Impl;
+using Prism3D12GraphicsCommandList20Impl = Prism3D12GraphicsCommandList7Impl;
 
 } // namespace prismx
