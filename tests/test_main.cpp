@@ -11638,6 +11638,205 @@ int Test_PrismX_Official_D3D12_Device57_CommandList51_And_Options69_Architecture
     return 0;
 }
 
+
+int Test_PrismX_Official_D3D12_Device58_CommandList52_And_Options70_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Device58_CommandList52_And_Options70_Architecture")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Instantiate canonical device and test QI for ID3D12Device58
+    PrismD3D12Device14CanonicalImpl dev;
+    ID3D12Device58* pDev58 = nullptr;
+    HRESULT hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device58, reinterpret_cast<void**>(&pDev58));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev58 != nullptr);
+
+    ID3D12Device58* pCanonical58 = nullptr;
+    hr = dev.QueryInterface(IID_ID3D12Device58, reinterpret_cast<void**>(&pCanonical58));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCanonical58 != nullptr);
+    pCanonical58->Release();
+
+    // 2. Test CheckFeatureSupport for D3D12_FEATURE_ABI_D3D12_OPTIONS70
+    D3D12_FEATURE_DATA_D3D12_OPTIONS70_ABI options70{};
+    hr = pDev58->CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS70, &options70, sizeof(options70));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(options70.WorkGraphsTier == 53u);
+    PRISMX_ASSERT(options70.CooperativeMatrixMultiply4398046511104Supported == 1);
+    PRISMX_ASSERT(options70.SubByteMicroscopicFormatsV33Supported == 1);
+    PRISMX_ASSERT(options70.DynamicClusterExpansionTier38Supported == 1);
+    PRISMX_ASSERT(options70.MaxWorkGraphConcurrencyGroups == 17592186044416ULL);
+    PRISMX_ASSERT(options70.TilePipeliningStagesSupported == 34359738368ULL);
+    PRISMX_ASSERT(options70.AutonomousGraphRecursionTier30Supported == 1);
+    PRISMX_ASSERT(options70.MultiQueueTensorPipelineFusionTier29Supported == 1);
+    PRISMX_ASSERT(options70.WorkGraphMeshShaderPipeliningTier30Supported == 1);
+    PRISMX_ASSERT(options70.SparseTensorBlockAccelerationTier26Supported == 1);
+    PRISMX_ASSERT(options70.DeterministicTensorReductionTier25Supported == 1);
+    PRISMX_ASSERT(options70.HyperQuantizationTier24Supported == 1);
+    PRISMX_ASSERT(options70.SparseClusterTier23Supported == 1);
+    PRISMX_ASSERT(options70.MultiQueueWorkGraphSyncTier22Supported == 1);
+    PRISMX_ASSERT(options70.AsynchronousKernelDispatchTier23Supported == 1);
+    PRISMX_ASSERT(options70.NeuralExecutionEngineTier20Supported == 1);
+    PRISMX_ASSERT(options70.AdaptiveTensorCoreTier19Supported == 1);
+    PRISMX_ASSERT(options70.SovereignSiliconTelemetryTier18Supported == 1);
+    PRISMX_ASSERT(options70.QuantumEmulationTier17Supported == 1);
+
+    // 3. Test CreateWorkGraphProgramRecord42 and GetWorkGraphCooperativeMatrixSupport37
+    void* pRecord42 = nullptr;
+    hr = pDev58->CreateWorkGraphProgramRecord42(nullptr, 0x2000, 17592186044416ULL, 8796093022208ULL, 0x200, 0x400, 0x800, 0x1000, 0x2000, 0x4000, 0x8000, 0x10000, 0x20000, 0x40000, 0x80000, 0x100000, 0x200000, 0x400000, 0x800000, 0x1000000, 0x2000000, 0x4000000, 0x8000000, 0x10000000, 0x20000000, IID_IUnknown, &pRecord42);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pRecord42 == reinterpret_cast<void*>(0x88042));
+
+    int32_t supported = 0;
+    uint64_t maxDim = 0;
+    uint32_t supportedTypes = 0;
+    uint32_t sparseAccel = 0;
+    int32_t asyncAccum = 0;
+    uint64_t maxTileStages = 0;
+    int32_t autoFeedback = 0;
+    int32_t subGraphRec = 0;
+    int32_t meshPipelining = 0;
+    int32_t multiQueueFusion = 0;
+    int32_t microscaling = 0;
+    int32_t subByteMicroscopic = 0;
+    int32_t sparseTensorBlockAcceleration = 0;
+    int32_t deterministicReduction = 0;
+    int32_t hyperQuantization = 0;
+    int32_t sparseClusterAcceleration = 0;
+    int32_t multiQueueSyncAcceleration = 0;
+    int32_t asyncKernelDispatchAcceleration = 0;
+    int32_t neuralExecutionEngineAcceleration = 0;
+    int32_t adaptiveTensorCoreAcceleration = 0;
+    int32_t sovereignSiliconTelemetryAcceleration = 0;
+    int32_t quantumEmulationAcceleration = 0;
+    hr = pDev58->GetWorkGraphCooperativeMatrixSupport37(
+        &supported, &maxDim, &supportedTypes, &sparseAccel, &asyncAccum, &maxTileStages,
+        &autoFeedback, &subGraphRec, &meshPipelining, &multiQueueFusion, &microscaling,
+        &subByteMicroscopic, &sparseTensorBlockAcceleration, &deterministicReduction,
+        &hyperQuantization, &sparseClusterAcceleration, &multiQueueSyncAcceleration,
+        &asyncKernelDispatchAcceleration, &neuralExecutionEngineAcceleration, &adaptiveTensorCoreAcceleration,
+        &sovereignSiliconTelemetryAcceleration, &quantumEmulationAcceleration
+    );
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(supported == 1);
+    PRISMX_ASSERT(maxDim == 4398046511104ULL);
+    PRISMX_ASSERT(supportedTypes == 0xFFFFFFFF);
+    PRISMX_ASSERT(sparseAccel == 1);
+    PRISMX_ASSERT(asyncAccum == 1);
+    PRISMX_ASSERT(maxTileStages == 34359738368ULL);
+    PRISMX_ASSERT(autoFeedback == 1);
+    PRISMX_ASSERT(subGraphRec == 1);
+    PRISMX_ASSERT(meshPipelining == 1);
+    PRISMX_ASSERT(multiQueueFusion == 1);
+    PRISMX_ASSERT(microscaling == 1);
+    PRISMX_ASSERT(subByteMicroscopic == 1);
+    PRISMX_ASSERT(sparseTensorBlockAcceleration == 1);
+    PRISMX_ASSERT(deterministicReduction == 1);
+    PRISMX_ASSERT(hyperQuantization == 1);
+    PRISMX_ASSERT(sparseClusterAcceleration == 1);
+    PRISMX_ASSERT(multiQueueSyncAcceleration == 1);
+    PRISMX_ASSERT(asyncKernelDispatchAcceleration == 1);
+    PRISMX_ASSERT(neuralExecutionEngineAcceleration == 1);
+    PRISMX_ASSERT(adaptiveTensorCoreAcceleration == 1);
+    PRISMX_ASSERT(sovereignSiliconTelemetryAcceleration == 1);
+    PRISMX_ASSERT(quantumEmulationAcceleration == 1);
+
+    pDev58->Release();
+
+    // 4. Test ID3D12GraphicsCommandList52 query and execution
+    Prism3D12CommandAllocatorImpl alloc(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT);
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, &alloc);
+    ID3D12GraphicsCommandList52* pCmdList52 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList52, reinterpret_cast<void**>(&pCmdList52));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmdList52 != nullptr);
+
+    ID3D12GraphicsCommandList52* pCanonicalCmd52 = nullptr;
+    hr = cmdList.QueryInterface(IID_ID3D12GraphicsCommandList52, reinterpret_cast<void**>(&pCanonicalCmd52));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCanonicalCmd52 != nullptr);
+    pCanonicalCmd52->Release();
+
+    // 5. Test SetWorkGraphBackingMemory42
+    pCmdList52->SetWorkGraphBackingMemory42(0xE00000000000ULL, 2305843009213693952ULL, 576460752303423488ULL, 17592186044416ULL, 0xFFFFFFFF, 0x40000000, 0xFFFFFFFF, 0xFFFFFFFF, 0x80000000, 0x4000000, 0x1400000, 0x1200000, 0x1200000, 0xE00000, 0xC00000, 0x600000, 0x400000, 0x200000, 0x100000, 0x80000, 0x40000, 0x20000, 0x10000, 0x8000, 0x4000, 0x3FFFFFF);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().RangeStart == 0xE00000000000ULL);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().RangeSizeInBytes == 2305843009213693952ULL);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().ScratchBufferSizeInBytes == 576460752303423488ULL);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().MaxConcurrency == 17592186044416ULL);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().DynamicExpansionFlags == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().MemoryPoolTier == 0x40000000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SparsityMask == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SubAllocationMask == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().PipelineCoherencyTier == 0x80000000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().FeedbackLoopTier == 0x4000000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SubGraphRecursionTier == 0x1400000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().MeshPipeliningTier == 0x1200000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().MultiQueueFusionTier == 0x1200000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().MicroscalingTier == 0xE00000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SubBytePrecisionTier == 0xC00000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SparseTensorBlockTier == 0x600000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().DeterministicTensorReductionTier == 0x400000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().HyperQuantizationTier == 0x200000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SparseClusterTier == 0x100000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().MultiQueueSyncTier == 0x80000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().AsyncKernelDispatchTier == 0x40000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().NeuralExecutionEngineTier == 0x20000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().AdaptiveTensorCoreTier == 0x10000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().SovereignSiliconTelemetryTier == 0x8000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().QuantumEmulationTier == 0x4000);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().Flags == 0x3FFFFFF);
+
+    // 6. Test DispatchGraphProgramRecord42
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecord42Count() == 0);
+    uint64_t rec42 = 0xFEEDBEEFCAFE0042ULL;
+    pCmdList52->DispatchGraphProgramRecord42(52, &rec42, sizeof(rec42), 4294000042u, 0xFFFFFFFF, 134217728u, 0xFFFFFFFF, 0xFFFFFFFF, 0x80000000, 0x4000000, 0x1400000, 0x1200000, 0x1200000, 0xE00000, 0xC00000, 0x600000, 0x400000, 0x200000, 0x100000, 0x80000, 0x40000, 0x20000, 0x10000, 0x8000, 0x4000, 0xFFFFFFFF, 0x7FFFFC0);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecord42Count() == 1);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].NodeIndex == 52);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].pRecord == &rec42);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].RecordSizeInBytes == sizeof(rec42));
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].ConcurrencyGroup == 4294000042u);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].QueueAffinityMask == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].DynamicClusterExpansionTier == 134217728u);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].TensorCoreMask == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].SubAllocationMask == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].PipelineCoherencyTier == 0x80000000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].FeedbackLoopTier == 0x4000000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].SubGraphRecursionTier == 0x1400000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].MeshPipeliningTier == 0x1200000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].MultiQueueFusionTier == 0x1200000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].MicroscalingTier == 0xE00000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].SubBytePrecisionTier == 0xC00000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].SparseTensorBlockTier == 0x600000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].DeterministicTensorReductionTier == 0x400000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].HyperQuantizationTier == 0x200000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].SparseClusterTier == 0x100000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].MultiQueueSyncTier == 0x80000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].AsyncKernelDispatchTier == 0x40000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].NeuralExecutionEngineTier == 0x20000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].AdaptiveTensorCoreTier == 0x10000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].SovereignSiliconTelemetryTier == 0x8000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].QuantumEmulationTier == 0x4000);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].DispatchMask == 0xFFFFFFFF);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecords42()[0].DispatchFlags == 0x7FFFFC0);
+
+    // 7. Test ClearState & Reset clears backing memory 42 and records 42
+    cmdList.ClearState(nullptr);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().RangeStart == 0);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecord42Count() == 0);
+
+    pCmdList52->SetWorkGraphBackingMemory42(0xCF90000, 2147483648ULL, 1073741824, 8388608, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().RangeStart == 0xCF90000);
+
+    cmdList.Reset(nullptr, nullptr);
+    PRISMX_ASSERT(cmdList.GetWorkGraphBackingMemory42().RangeStart == 0);
+    PRISMX_ASSERT(cmdList.GetRecordedProgramRecord42Count() == 0);
+
+    pCmdList52->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -11745,9 +11944,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device55_CommandList49_And_Options67_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device56_CommandList50_And_Options68_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device57_CommandList51_And_Options69_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Device58_CommandList52_And_Options70_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (101/101)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (102/102)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
