@@ -63,9 +63,9 @@ public:
                 for (uint32_t i = 0; i < count && ptr < reinterpret_cast<const uint8_t*>(pBlob) + blobLen; ++i) {
                     uint32_t nameLen = *reinterpret_cast<const uint32_t*>(ptr);
                     ptr += 4;
-                    if (ptr + nameLen * 2 <= reinterpret_cast<const uint8_t*>(pBlob) + blobLen) {
+                    if (ptr + nameLen * sizeof(wchar_t) <= reinterpret_cast<const uint8_t*>(pBlob) + blobLen) {
                         std::wstring name(reinterpret_cast<const wchar_t*>(ptr), nameLen);
-                        ptr += nameLen * 2;
+                        ptr += nameLen * sizeof(wchar_t);
                         D3D12_GRAPHICS_PIPELINE_STATE_DESC dummy{};
                         ID3D12PipelineState* pso = nullptr;
                         if (m_pDevice && m_pDevice->CreateGraphicsPipelineState(&dummy, IID_ID3D12PipelineState, reinterpret_cast<void**>(&pso)) == 0) {
