@@ -14338,6 +14338,140 @@ int Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    // 1. Acquire ID3D12DeviceFactory via D3D12GetInterface(OFFICIAL_CLSID_D3D12DeviceFactory)
+    ID3D12DeviceFactory* pFactory = nullptr;
+    HRESULT hr = D3D12GetInterfaceAbi(OFFICIAL_CLSID_D3D12DeviceFactory, OFFICIAL_IID_ID3D12DeviceFactory, reinterpret_cast<void**>(&pFactory));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pFactory != nullptr);
+
+    // 2. Query ID3D12AsyncCommandsFallback configuration interface
+    ID3D12AsyncCommandsFallback* pFallback = nullptr;
+    hr = pFactory->GetConfigurationInterface(CLSID_D3D12AsyncCommandsFallback, OFFICIAL_IID_ID3D12AsyncCommandsFallback, reinterpret_cast<void**>(&pFallback));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pFallback != nullptr);
+    PRISMX_ASSERT(pFallback->GetFallbackLayerEnabled() == 0);
+
+    // 3. Opt-in to fallback layer
+    hr = pFallback->SetFallbackLayerEnabled(1);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pFallback->GetFallbackLayerEnabled() == 1);
+
+    // 4. Create device through factory with fallback layer opted in
+    ID3D12Device* pDevice = nullptr;
+    hr = pFactory->CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, OFFICIAL_IID_ID3D12Device, reinterpret_cast<void**>(&pDevice));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDevice != nullptr);
+
+    // 5. Verify CheckFeatureSupport reports D3D12_ASYNC_COMMANDS_IMPL_FALLBACK
+    D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI asyncFeat{};
+    hr = reinterpret_cast<PrismD3D12Device14CanonicalImpl*>(pDevice)->CheckFeatureSupport(D3D12_FEATURE_ABI_ASYNC_COMMANDS, &asyncFeat, sizeof(asyncFeat));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(asyncFeat.Impl == D3D12_ASYNC_COMMANDS_IMPL_FALLBACK);
+
+    // 6. Query ID3D12AsyncCommandsFallback directly on device
+    ID3D12AsyncCommandsFallback* pDevFallback = nullptr;
+    hr = pDevice->QueryInterface(OFFICIAL_IID_ID3D12AsyncCommandsFallback, reinterpret_cast<void**>(&pDevFallback));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDevFallback != nullptr);
+    PRISMX_ASSERT(pDevFallback->GetFallbackLayerEnabled() == 1);
+
+    // Toggle fallback off directly on device -> verifies dynamic transition to NATIVE
+    hr = pDevFallback->SetFallbackLayerEnabled(0);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    hr = reinterpret_cast<PrismD3D12Device14CanonicalImpl*>(pDevice)->CheckFeatureSupport(D3D12_FEATURE_ABI_ASYNC_COMMANDS, &asyncFeat, sizeof(asyncFeat));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(asyncFeat.Impl == D3D12_ASYNC_COMMANDS_IMPL_NATIVE);
+
+    // 7. Verify all 10 Async Commands on ID3D12GraphicsCommandList12
+    Prism3D12GraphicsCommandList7Impl cmdList(nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, nullptr);
+    ID3D12GraphicsCommandList12* pCmd12 = nullptr;
+    hr = cmdList.QueryInterface(OFFICIAL_IID_ID3D12GraphicsCommandList12_Official, reinterpret_cast<void**>(&pCmd12));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCmd12 != nullptr);
+
+    // [1] CopyBufferRegions
+    ID3D12Resource* destBufs[2] = { reinterpret_cast<ID3D12Resource*>(0x1000), reinterpret_cast<ID3D12Resource*>(0x2000) };
+    ID3D12Resource* srcBufs[2]  = { reinterpret_cast<ID3D12Resource*>(0x3000), reinterpret_cast<ID3D12Resource*>(0x4000) };
+    uint64_t destOffsets[2] = { 0, 64 };
+    uint64_t srcOffsets[2]  = { 0, 128 };
+    uint64_t sizes[2]       = { 64, 256 };
+    pCmd12->CopyBufferRegions(2, destBufs, destOffsets, srcBufs, srcOffsets, sizes);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncCopyBufferCount() == 2);
+
+    // [2] CopyTextureRegions
+    D3D12_TEXTURE_COPY_DESC texCopyDesc{};
+    texCopyDesc.Type = D3D12_TEXTURE_COPY_DESC_TYPE_TEXTURE_TO_TEXTURE;
+    texCopyDesc.NumRegions = 1;
+    pCmd12->CopyTextureRegions(1, &texCopyDesc);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncCopyTextureCount() == 1);
+
+    // [3] CopyResources
+    ID3D12Resource* destRes[1] = { reinterpret_cast<ID3D12Resource*>(0x5000) };
+    ID3D12Resource* srcRes[1]  = { reinterpret_cast<ID3D12Resource*>(0x6000) };
+    pCmd12->CopyResources(1, destRes, srcRes);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncCopyResourceCount() == 1);
+
+    // [4] CopyTilesAsync
+    D3D12_TILED_RESOURCE_COORDINATE coord{ 0, 0, 0, 0 };
+    D3D12_TILE_REGION_SIZE regionSize{ 1, 0, 64, 64, 1 };
+    pCmd12->CopyTilesAsync(reinterpret_cast<ID3D12Resource*>(0x7000), &coord, &regionSize, reinterpret_cast<ID3D12Resource*>(0x8000), 0, D3D12_TILE_COPY_FLAG_NONE);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncCopyTilesCount() == 1);
+
+    // [5] ResolveSubresourceRegionAsync
+    D3D12_RECT rect{ 0, 0, 1920, 1080 };
+    pCmd12->ResolveSubresourceRegionAsync(reinterpret_cast<ID3D12Resource*>(0x9000), 0, 0, 0, reinterpret_cast<ID3D12Resource*>(0xA000), 0, &rect, DXGI_FORMAT_R8G8B8A8_UNORM, D3D12_RESOLVE_MODE_AVERAGE);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncResolveSubresourceCount() == 1);
+
+    // [6] ResolveQueryDataAsync
+    pCmd12->ResolveQueryDataAsync(nullptr, D3D12_QUERY_TYPE_OCCLUSION, 0, 4, reinterpret_cast<ID3D12Resource*>(0xB000), 0);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncResolveQueryCount() == 4);
+
+    // [7] ClearBoundDepthStencilView
+    D3D12_BOX box{ 0, 0, 0, 1920, 1080, 1 };
+    pCmd12->ClearBoundDepthStencilView(D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 1, &box);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncClearBoundDepthStencilCount() == 1);
+
+    // [8] ClearBoundRenderTargetViews
+    D3D12_CLEAR_DATA clearData[8]{};
+    clearData[0].Floats[0] = 0.2f; clearData[0].Floats[1] = 0.4f; clearData[0].Floats[2] = 0.6f; clearData[0].Floats[3] = 1.0f;
+    pCmd12->ClearBoundRenderTargetViews(0x1, clearData, nullptr, nullptr);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncClearBoundRenderTargetCount() == 1);
+
+    // [9] ClearTextureSubresources
+    D3D12_CLEAR_TEXTURE_DESC clearTexDesc{};
+    clearTexDesc.pTexture = reinterpret_cast<ID3D12Resource*>(0xC000);
+    clearTexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    clearTexDesc.ClearValue = clearData[0];
+    pCmd12->ClearTextureSubresources(1, &clearTexDesc);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncClearTextureCount() == 1);
+
+    // [10] FillBuffers
+    D3D12_FILL_BUFFER_DESC fillDesc{};
+    fillDesc.pBuffer = reinterpret_cast<ID3D12Resource*>(0xD000);
+    fillDesc.Offset = 0;
+    fillDesc.FillValue.Uints[0] = 0xDEADBEEF;
+    fillDesc.Format = DXGI_FORMAT_R32_UINT;
+    fillDesc.RawPatternSizeInBytes = 4;
+    fillDesc.RepeatCount = 1024;
+    pCmd12->FillBuffers(1, &fillDesc);
+    PRISMX_ASSERT(cmdList.GetRecordedAsyncFillBuffersCount() == 1);
+
+    // 8. Clean up
+    pCmd12->Release();
+    pDevFallback->Release();
+    pDevice->Release();
+    pFallback->Release();
+    pFactory->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -14465,9 +14599,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device75_CommandList69_And_Options87_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device76_CommandList70_And_Options88_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (121/121)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (122/122)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

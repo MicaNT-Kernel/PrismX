@@ -255,6 +255,19 @@ inline constexpr IID OFFICIAL_CLSID_D3D12SDKConfiguration =
     { 0x7cda6aca, 0xa03e, 0x49c8, { 0x94, 0x58, 0x03, 0x34, 0xd2, 0x0e, 0x07, 0xce } };
 inline constexpr IID OFFICIAL_CLSID_D3D12DeviceFactory =
     { 0x114863bf, 0xc386, 0x4aee, { 0xb3, 0x9d, 0x8f, 0x0f, 0xe0, 0x62, 0x95, 0xb5 } };
+inline constexpr GUID CLSID_D3D12DeviceFactory = OFFICIAL_CLSID_D3D12DeviceFactory;
+
+inline constexpr GUID OFFICIAL_CLSID_D3D12AsyncCommandsFallback =
+    { 0xef4992f0, 0x0fae, 0x424e, { 0xb4, 0x84, 0x7b, 0xcd, 0x8e, 0x56, 0x9e, 0x3e } };
+inline constexpr GUID CLSID_D3D12AsyncCommandsFallback = OFFICIAL_CLSID_D3D12AsyncCommandsFallback;
+
+inline constexpr IID OFFICIAL_IID_ID3D12AsyncCommandsFallback =
+    { 0xfbddf9e8, 0x33a3, 0x488c, { 0x97, 0x75, 0x1a, 0x97, 0x0d, 0xc5, 0x48, 0x62 } };
+inline constexpr IID IID_ID3D12AsyncCommandsFallback = OFFICIAL_IID_ID3D12AsyncCommandsFallback;
+
+inline constexpr IID OFFICIAL_IID_ID3D12DeviceFactory =
+    { 0x61f307d3, 0xd34e, 0x4e7c, { 0x83, 0x74, 0x3b, 0xa4, 0xde, 0x23, 0xcc, 0xcb } };
+inline constexpr IID IID_ID3D12DeviceFactory = OFFICIAL_IID_ID3D12DeviceFactory;
 
 inline constexpr IID OFFICIAL_IID_ID3D12SDKConfiguration =
     { 0xe9eb5314, 0x33aa, 0x42b2, { 0xa7, 0x18, 0xd7, 0x7f, 0x58, 0xb1, 0xf1, 0xc7 } };
@@ -355,7 +368,18 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS85        = 124,
     D3D12_FEATURE_ABI_D3D12_OPTIONS86        = 125,
     D3D12_FEATURE_ABI_D3D12_OPTIONS87        = 126,
-    D3D12_FEATURE_ABI_D3D12_OPTIONS88        = 127
+    D3D12_FEATURE_ABI_D3D12_OPTIONS88        = 127,
+    D3D12_FEATURE_ABI_ASYNC_COMMANDS         = 128
+};
+
+enum D3D12_ASYNC_COMMANDS_IMPL : uint32_t {
+    D3D12_ASYNC_COMMANDS_IMPL_NOT_SUPPORTED = 0,
+    D3D12_ASYNC_COMMANDS_IMPL_FALLBACK      = 1,
+    D3D12_ASYNC_COMMANDS_IMPL_NATIVE        = 2
+};
+
+struct D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI {
+    D3D12_ASYNC_COMMANDS_IMPL Impl;
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -1752,6 +1776,23 @@ class ID3D12DeviceRemovedExtendedData2 : public ID3D12DeviceRemovedExtendedData1
 public:
     virtual HRESULT GetPageFaultAllocationOutput2(D3D12_DRED_PAGE_FAULT_OUTPUT2* pOutput) = 0;
     virtual D3D12_DRED_DEVICE_STATE GetDeviceState() = 0;
+};
+
+class ID3D12AsyncCommandsFallback : public IUnknown {
+public:
+    virtual HRESULT SetFallbackLayerEnabled(int32_t Enable) = 0;
+    virtual int32_t GetFallbackLayerEnabled() = 0;
+};
+
+class ID3D12DeviceFactory : public IUnknown {
+public:
+    virtual HRESULT InitializeFromGlobalState() = 0;
+    virtual HRESULT ApplyToGlobalState() = 0;
+    virtual HRESULT SetFlags(uint32_t flags) = 0;
+    virtual uint32_t GetFlags() = 0;
+    virtual HRESULT GetConfigurationInterface(const GUID& clsid, const IID& iid, void** ppv) = 0;
+    virtual HRESULT EnableFeatures(uint32_t NumFeatures, const IID* pIIDs, void* pConfigurationStructs, uint32_t* pConfigurationStructSizes) = 0;
+    virtual HRESULT CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL FeatureLevel, const IID& riid, void** ppvDevice) = 0;
 };
 
 enum D3D12_QUERY_HEAP_TYPE : uint32_t {
@@ -4895,12 +4936,57 @@ public:
     }
 };
 
+class PrismD3D12AsyncCommandsFallbackImpl : public ID3D12AsyncCommandsFallback {
+private:
+    std::atomic<uint32_t> m_refCount{ 1 };
+    int32_t*              m_pSharedFlag{ nullptr };
+    int32_t               m_localFlag{ 0 };
+
+public:
+    PrismD3D12AsyncCommandsFallbackImpl(int32_t* pShared = nullptr)
+        : m_pSharedFlag(pShared) {}
+
+    HRESULT QueryInterface(const IID& riid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (riid == IID_IUnknown ||
+            riid == OFFICIAL_IID_ID3D12AsyncCommandsFallback ||
+            riid == IID_ID3D12AsyncCommandsFallback) {
+            *ppv = static_cast<ID3D12AsyncCommandsFallback*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    uint32_t AddRef() override { return ++m_refCount; }
+    uint32_t Release() override {
+        uint32_t c = --m_refCount;
+        if (c == 0) delete this;
+        return c;
+    }
+
+    HRESULT SetFallbackLayerEnabled(int32_t Enable) override {
+        m_localFlag = Enable;
+        if (m_pSharedFlag) *m_pSharedFlag = Enable;
+        return S_OK;
+    }
+
+    int32_t GetFallbackLayerEnabled() override {
+        if (m_pSharedFlag) return *m_pSharedFlag;
+        return m_localFlag;
+    }
+};
+
 class PrismD3D12Device14CanonicalImpl : public ID3D12Device76 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
     ComPtr<IUnknown>      m_defaultPsdbSession;
     uint32_t              m_psdbFlags{ 0 };
+
+public:
+    int32_t               m_asyncCommandsFallbackEnabled{ 0 };
 
 public:
     PrismD3D12Device14CanonicalImpl() {
@@ -5061,6 +5147,13 @@ public:
             pDred->Release();
             return hr;
         }
+        // Support Async Commands Fallback interface
+        if (riid == OFFICIAL_IID_ID3D12AsyncCommandsFallback ||
+            riid == IID_ID3D12AsyncCommandsFallback) {
+            auto* pFallback = new PrismD3D12AsyncCommandsFallbackImpl(&m_asyncCommandsFallbackEnabled);
+            *ppv = pFallback;
+            return S_OK;
+        }
         *ppv = nullptr;
         return E_NOINTERFACE;
     }
@@ -5200,6 +5293,12 @@ public:
                 if (Size < sizeof(D3D12_FEATURE_DATA_EXPLICIT_PSDBS_ABI)) return E_INVALIDARG;
                 auto* p = static_cast<D3D12_FEATURE_DATA_EXPLICIT_PSDBS_ABI*>(pData);
                 p->ExplicitPsdbsSupported = 1;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_ASYNC_COMMANDS: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI)) return E_INVALIDARG;
+                auto* p = static_cast<D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI*>(pData);
+                p->Impl = m_asyncCommandsFallbackEnabled ? D3D12_ASYNC_COMMANDS_IMPL_FALLBACK : D3D12_ASYNC_COMMANDS_IMPL_NATIVE;
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {
@@ -8472,6 +8571,68 @@ public:
     uint32_t GetSDKVersion() const noexcept { return m_sdkVersion; }
 };
 
+class PrismD3D12DeviceFactoryImpl : public ID3D12DeviceFactory {
+private:
+    std::atomic<uint32_t> m_refCount{ 1 };
+    uint32_t              m_flags{ 0 };
+    int32_t               m_asyncFallbackEnabled{ 0 };
+
+public:
+    HRESULT QueryInterface(const IID& riid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (riid == IID_IUnknown ||
+            riid == OFFICIAL_IID_ID3D12DeviceFactory ||
+            riid == IID_ID3D12DeviceFactory) {
+            *ppv = static_cast<ID3D12DeviceFactory*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    uint32_t AddRef() override { return ++m_refCount; }
+    uint32_t Release() override {
+        uint32_t c = --m_refCount;
+        if (c == 0) delete this;
+        return c;
+    }
+
+    HRESULT InitializeFromGlobalState() override { return S_OK; }
+    HRESULT ApplyToGlobalState() override { return S_OK; }
+    HRESULT SetFlags(uint32_t flags) override {
+        m_flags = flags;
+        return S_OK;
+    }
+    uint32_t GetFlags() override { return m_flags; }
+
+    HRESULT GetConfigurationInterface(const GUID& clsid, const IID& iid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (clsid == CLSID_D3D12AsyncCommandsFallback) {
+            auto* pFallback = new PrismD3D12AsyncCommandsFallbackImpl(&m_asyncFallbackEnabled);
+            HRESULT hr = pFallback->QueryInterface(iid, ppv);
+            pFallback->Release();
+            return hr;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    HRESULT EnableFeatures(uint32_t, const IID*, void*, uint32_t*) override {
+        return S_OK;
+    }
+
+    HRESULT CreateDevice(IUnknown* adapter, D3D_FEATURE_LEVEL FeatureLevel, const IID& riid, void** ppvDevice) override {
+        (void)adapter; (void)FeatureLevel;
+        if (!ppvDevice) return E_POINTER;
+        auto* dev = new PrismD3D12Device14CanonicalImpl();
+        dev->m_asyncCommandsFallbackEnabled = m_asyncFallbackEnabled;
+        HRESULT hr = dev->QueryInterface(riid, ppvDevice);
+        dev->Release();
+        return hr;
+    }
+};
+
 inline HRESULT D3D12GetInterfaceAbi(const IID& rclsid, const IID& riid, void** ppvDebug) noexcept {
     if (!ppvDebug) return E_INVALIDARG;
     if (rclsid == OFFICIAL_CLSID_D3D12SDKConfiguration) {
@@ -8486,7 +8647,19 @@ inline HRESULT D3D12GetInterfaceAbi(const IID& rclsid, const IID& riid, void** p
         pSettings->Release();
         return hr;
     }
-    if (rclsid == OFFICIAL_CLSID_D3D12Debug || rclsid == OFFICIAL_CLSID_D3D12DeviceFactory) {
+    if (rclsid == OFFICIAL_CLSID_D3D12DeviceFactory) {
+        auto* pFactory = new PrismD3D12DeviceFactoryImpl();
+        HRESULT hr = pFactory->QueryInterface(riid, ppvDebug);
+        pFactory->Release();
+        return hr;
+    }
+    if (rclsid == CLSID_D3D12AsyncCommandsFallback) {
+        auto* pFallback = new PrismD3D12AsyncCommandsFallbackImpl();
+        HRESULT hr = pFallback->QueryInterface(riid, ppvDebug);
+        pFallback->Release();
+        return hr;
+    }
+    if (rclsid == OFFICIAL_CLSID_D3D12Debug) {
         auto* pDev = new PrismD3D12Device14CanonicalImpl();
         HRESULT hr = pDev->QueryInterface(IID_IUnknown, ppvDebug);
         pDev->Release();

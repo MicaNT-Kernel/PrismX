@@ -233,11 +233,146 @@ public:
 };
 
 // ============================================================================
-// ID3D12GraphicsCommandList12 (Next-Gen Work Graph Output Records & Remap)
+// Microsoft Direct3D 12 Async Commands (Agility SDK 1.620+ / Windows 11 2026)
+// ============================================================================
+
+using D3D12ComAbi::ID3D12QueryHeap;
+using D3D12ComAbi::D3D12_QUERY_TYPE;
+
+typedef struct D3D12_BOX {
+    uint32_t left;
+    uint32_t top;
+    uint32_t front;
+    uint32_t right;
+    uint32_t bottom;
+    uint32_t back;
+} D3D12_BOX;
+
+enum D3D12_CLEAR_FLAGS : uint32_t {
+    D3D12_CLEAR_FLAG_NONE    = 0,
+    D3D12_CLEAR_FLAG_DEPTH   = 0x1,
+    D3D12_CLEAR_FLAG_STENCIL = 0x2
+};
+
+inline constexpr D3D12_CLEAR_FLAGS operator|(D3D12_CLEAR_FLAGS a, D3D12_CLEAR_FLAGS b) {
+    return static_cast<D3D12_CLEAR_FLAGS>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+
+enum D3D12_TILE_COPY_FLAGS : uint32_t {
+    D3D12_TILE_COPY_FLAG_NONE                                     = 0,
+    D3D12_TILE_COPY_FLAG_NO_HAZARD                                = 0x1,
+    D3D12_TILE_COPY_FLAG_LINEAR_BUFFER_TO_SWIZZLED_TILED_RESOURCE = 0x2,
+    D3D12_TILE_COPY_FLAG_SWIZZLED_TILED_RESOURCE_TO_LINEAR_BUFFER = 0x4
+};
+
+enum D3D12_RESOLVE_MODE : uint32_t {
+    D3D12_RESOLVE_MODE_DECOMPRESS              = 0,
+    D3D12_RESOLVE_MODE_MIN                     = 1,
+    D3D12_RESOLVE_MODE_MAX                     = 2,
+    D3D12_RESOLVE_MODE_AVERAGE                 = 3,
+    D3D12_RESOLVE_MODE_ENCODE_SAMPLER_FEEDBACK = 4,
+    D3D12_RESOLVE_MODE_DECODE_SAMPLER_FEEDBACK = 5
+};
+
+typedef struct D3D12_SUBRESOURCE_FOOTPRINT {
+    DXGI_FORMAT Format;
+    uint32_t    Width;
+    uint32_t    Height;
+    uint32_t    Depth;
+    uint32_t    RowPitch;
+} D3D12_SUBRESOURCE_FOOTPRINT;
+
+typedef struct D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+    uint64_t                    Offset;
+    D3D12_SUBRESOURCE_FOOTPRINT Footprint;
+} D3D12_PLACED_SUBRESOURCE_FOOTPRINT;
+
+typedef struct D3D12_TILED_RESOURCE_COORDINATE {
+    uint32_t X;
+    uint32_t Y;
+    uint32_t Z;
+    uint32_t Subresource;
+} D3D12_TILED_RESOURCE_COORDINATE;
+
+typedef struct D3D12_TILE_REGION_SIZE {
+    uint32_t NumTiles;
+    int32_t  UseBox;
+    uint32_t Width;
+    uint16_t Height;
+    uint16_t Depth;
+} D3D12_TILE_REGION_SIZE;
+
+typedef struct D3D12_CLEAR_DATA {
+    union {
+        float    Floats[4];
+        uint32_t Uints[4];
+        int32_t  Sints[4];
+        uint8_t  Bytes[16];
+    };
+} D3D12_CLEAR_DATA;
+
+enum D3D12_TEXTURE_COPY_DESC_TYPE {
+    D3D12_TEXTURE_COPY_DESC_TYPE_TEXTURE_TO_TEXTURE = 0,
+    D3D12_TEXTURE_COPY_DESC_TYPE_BUFFER_TO_TEXTURE  = 1,
+    D3D12_TEXTURE_COPY_DESC_TYPE_TEXTURE_TO_BUFFER  = 2
+};
+
+typedef struct D3D12_TEXTURE_COPY_REGION {
+    uint32_t         DestX;
+    uint32_t         DestY;
+    uint32_t         DestZ;
+    const D3D12_BOX* pSourceBox;
+} D3D12_TEXTURE_COPY_REGION;
+
+typedef struct D3D12_TEXTURE_TEXTURE_COPY_DESC {
+    ID3D12Resource* pDest;
+    uint32_t        DestSubresourceIndex;
+    ID3D12Resource* pSource;
+    uint32_t        SourceSubresourceIndex;
+} D3D12_TEXTURE_TEXTURE_COPY_DESC;
+
+typedef struct D3D12_BUFFER_TEXTURE_COPY_DESC {
+    ID3D12Resource*                    pBuffer;
+    ID3D12Resource*                    pTexture;
+    uint32_t                           SubresourceIndex;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT PlacedFootprint;
+} D3D12_BUFFER_TEXTURE_COPY_DESC;
+
+typedef struct D3D12_TEXTURE_COPY_DESC {
+    D3D12_TEXTURE_COPY_DESC_TYPE     Type;
+    uint32_t                         NumRegions;
+    const D3D12_TEXTURE_COPY_REGION* pCopyRegions;
+    union {
+        D3D12_TEXTURE_TEXTURE_COPY_DESC TextureTextureCopy;
+        D3D12_BUFFER_TEXTURE_COPY_DESC  BufferTextureCopy;
+    };
+} D3D12_TEXTURE_COPY_DESC;
+
+typedef struct D3D12_CLEAR_TEXTURE_DESC {
+    ID3D12Resource*  pTexture;
+    uint32_t         SubresourceIndex;
+    D3D12_CLEAR_DATA ClearValue;
+    DXGI_FORMAT      Format;
+    const D3D12_BOX* pRegion;
+} D3D12_CLEAR_TEXTURE_DESC;
+
+typedef struct D3D12_FILL_BUFFER_DESC {
+    ID3D12Resource*  pBuffer;
+    uint64_t         Offset;
+    D3D12_CLEAR_DATA FillValue;
+    DXGI_FORMAT      Format;
+    uint32_t         RawPatternSizeInBytes;
+    uint32_t         RepeatCount;
+} D3D12_FILL_BUFFER_DESC;
+
+// ============================================================================
+// ID3D12GraphicsCommandList12 (Official Async Commands & Next-Gen Work Graphs)
 // ============================================================================
 
 inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList12 =
     { 0x9c44eb8f, 0x8ef7, 0x4c75, { 0xa0, 0x13, 0x1f, 0xb9, 0xb3, 0x90, 0xd8, 0x85 } };
+inline constexpr IID OFFICIAL_IID_ID3D12GraphicsCommandList12_Official =
+    { 0x9524ea5e, 0xc1b0, 0x4fe5, { 0xa2, 0x03, 0xa7, 0x5a, 0xbc, 0x5d, 0x8e, 0x3a } };
 inline constexpr IID IID_ID3D12GraphicsCommandList12 = OFFICIAL_IID_ID3D12GraphicsCommandList12;
 
 class ID3D12GraphicsCommandList12 : public ID3D12GraphicsCommandList11 {
@@ -251,6 +386,72 @@ public:
         uint32_t NodeIndex,
         const void* pRecord,
         uint32_t RecordSizeInBytes) = 0;
+
+    // Official Microsoft Direct3D 12 Async Commands (Agility SDK 1.620+ / Windows 11 2026)
+    virtual void CopyBufferRegions(
+        uint32_t NumRegions,
+        ID3D12Resource* const* ppDestBuffers,
+        const uint64_t* pDestOffsets,
+        ID3D12Resource* const* ppSourceBuffers,
+        const uint64_t* pSourceOffsets,
+        const uint64_t* pSizes) = 0;
+
+    virtual void CopyTextureRegions(
+        uint32_t NumCopyDescs,
+        const D3D12_TEXTURE_COPY_DESC* pCopyDescs) = 0;
+
+    virtual void CopyResources(
+        uint32_t NumSourceDestPairs,
+        ID3D12Resource* const* ppDestResources,
+        ID3D12Resource* const* ppSourceResources) = 0;
+
+    virtual void CopyTilesAsync(
+        ID3D12Resource* pTiledResource,
+        const D3D12_TILED_RESOURCE_COORDINATE* pTileRegionStartCoordinate,
+        const D3D12_TILE_REGION_SIZE* pTileRegionSize,
+        ID3D12Resource* pBuffer,
+        uint64_t BufferOffset,
+        D3D12_TILE_COPY_FLAGS Flags) = 0;
+
+    virtual void ResolveSubresourceRegionAsync(
+        ID3D12Resource* pDestResource,
+        uint32_t DestSubresource,
+        uint32_t DestX,
+        uint32_t DestY,
+        ID3D12Resource* pSourceResource,
+        uint32_t SourceSubresource,
+        const D3D12_RECT* pSourceRect,
+        DXGI_FORMAT Format,
+        D3D12_RESOLVE_MODE ResolveMode) = 0;
+
+    virtual void ResolveQueryDataAsync(
+        ID3D12QueryHeap* pQueryHeap,
+        D3D12_QUERY_TYPE Type,
+        uint32_t StartIndex,
+        uint32_t NumQueries,
+        ID3D12Resource* pDestBuffer,
+        uint64_t DestOffset) = 0;
+
+    virtual void ClearBoundDepthStencilView(
+        D3D12_CLEAR_FLAGS ClearFlags,
+        float Depth,
+        uint8_t Stencil,
+        uint32_t NumRegions,
+        const D3D12_BOX* pRegions) = 0;
+
+    virtual void ClearBoundRenderTargetViews(
+        uint32_t RenderTargetMask,
+        const D3D12_CLEAR_DATA* pClearValues,
+        const uint32_t* pNumRegions,
+        const D3D12_BOX* const* ppRegions) = 0;
+
+    virtual void ClearTextureSubresources(
+        uint32_t NumClearDescs,
+        const D3D12_CLEAR_TEXTURE_DESC* pClearDescs) = 0;
+
+    virtual void FillBuffers(
+        uint32_t NumFillDescs,
+        const D3D12_FILL_BUFFER_DESC* pFillDescs) = 0;
 };
 
 // ============================================================================
@@ -3585,6 +3786,17 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS_RANGE m_backingMemory{};
     std::vector<std::pair<uint32_t, const void*>> m_recordedProgramRecords;
 
+    uint32_t m_recordedAsyncCopyBufferCount{ 0 };
+    uint32_t m_recordedAsyncCopyTextureCount{ 0 };
+    uint32_t m_recordedAsyncCopyResourceCount{ 0 };
+    uint32_t m_recordedAsyncCopyTilesCount{ 0 };
+    uint32_t m_recordedAsyncResolveSubresourceCount{ 0 };
+    uint32_t m_recordedAsyncResolveQueryCount{ 0 };
+    uint32_t m_recordedAsyncClearBoundDepthStencilCount{ 0 };
+    uint32_t m_recordedAsyncClearBoundRenderTargetCount{ 0 };
+    uint32_t m_recordedAsyncClearTextureCount{ 0 };
+    uint32_t m_recordedAsyncFillBuffersCount{ 0 };
+
     struct BackingMemory2Record {
         D3D12_GPU_VIRTUAL_ADDRESS RangeStart{ 0 };
         uint64_t RangeSizeInBytes{ 0 };
@@ -5812,7 +6024,7 @@ public:
             AddRef();
             return 0;
         }
-        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList12 || riid == IID_ID3D12GraphicsCommandList12) {
+        if (riid == OFFICIAL_IID_ID3D12GraphicsCommandList12 || riid == IID_ID3D12GraphicsCommandList12 || riid == OFFICIAL_IID_ID3D12GraphicsCommandList12_Official) {
             *ppv = static_cast<ID3D12GraphicsCommandList12*>(this);
             AddRef();
             return 0;
@@ -6389,6 +6601,114 @@ public:
     void DispatchGraphProgramRecord2(uint32_t NodeIndex, const void* pRecord, uint32_t RecordSizeInBytes) override {
         m_recordedProgramRecords2.push_back({ NodeIndex, pRecord, RecordSizeInBytes });
     }
+
+    void CopyBufferRegions(
+        uint32_t NumRegions,
+        ID3D12Resource* const* ppDestBuffers,
+        const uint64_t* pDestOffsets,
+        ID3D12Resource* const* ppSourceBuffers,
+        const uint64_t* pSourceOffsets,
+        const uint64_t* pSizes) override {
+        (void)ppDestBuffers; (void)pDestOffsets; (void)ppSourceBuffers; (void)pSourceOffsets; (void)pSizes;
+        m_recordedAsyncCopyBufferCount += NumRegions;
+    }
+
+    void CopyTextureRegions(
+        uint32_t NumCopyDescs,
+        const D3D12_TEXTURE_COPY_DESC* pCopyDescs) override {
+        (void)pCopyDescs;
+        m_recordedAsyncCopyTextureCount += NumCopyDescs;
+    }
+
+    void CopyResources(
+        uint32_t NumSourceDestPairs,
+        ID3D12Resource* const* ppDestResources,
+        ID3D12Resource* const* ppSourceResources) override {
+        (void)ppDestResources; (void)ppSourceResources;
+        m_recordedAsyncCopyResourceCount += NumSourceDestPairs;
+    }
+
+    void CopyTilesAsync(
+        ID3D12Resource* pTiledResource,
+        const D3D12_TILED_RESOURCE_COORDINATE* pTileRegionStartCoordinate,
+        const D3D12_TILE_REGION_SIZE* pTileRegionSize,
+        ID3D12Resource* pBuffer,
+        uint64_t BufferOffset,
+        D3D12_TILE_COPY_FLAGS Flags) override {
+        (void)pTiledResource; (void)pTileRegionStartCoordinate; (void)pTileRegionSize;
+        (void)pBuffer; (void)BufferOffset; (void)Flags;
+        m_recordedAsyncCopyTilesCount++;
+    }
+
+    void ResolveSubresourceRegionAsync(
+        ID3D12Resource* pDestResource,
+        uint32_t DestSubresource,
+        uint32_t DestX,
+        uint32_t DestY,
+        ID3D12Resource* pSourceResource,
+        uint32_t SourceSubresource,
+        const D3D12_RECT* pSourceRect,
+        DXGI_FORMAT Format,
+        D3D12_RESOLVE_MODE ResolveMode) override {
+        (void)pDestResource; (void)DestSubresource; (void)DestX; (void)DestY;
+        (void)pSourceResource; (void)SourceSubresource; (void)pSourceRect; (void)Format; (void)ResolveMode;
+        m_recordedAsyncResolveSubresourceCount++;
+    }
+
+    void ResolveQueryDataAsync(
+        ID3D12QueryHeap* pQueryHeap,
+        D3D12_QUERY_TYPE Type,
+        uint32_t StartIndex,
+        uint32_t NumQueries,
+        ID3D12Resource* pDestBuffer,
+        uint64_t DestOffset) override {
+        (void)pQueryHeap; (void)Type; (void)StartIndex; (void)NumQueries; (void)pDestBuffer; (void)DestOffset;
+        m_recordedAsyncResolveQueryCount += NumQueries;
+    }
+
+    void ClearBoundDepthStencilView(
+        D3D12_CLEAR_FLAGS ClearFlags,
+        float Depth,
+        uint8_t Stencil,
+        uint32_t NumRegions,
+        const D3D12_BOX* pRegions) override {
+        (void)ClearFlags; (void)Depth; (void)Stencil; (void)NumRegions; (void)pRegions;
+        m_recordedAsyncClearBoundDepthStencilCount++;
+    }
+
+    void ClearBoundRenderTargetViews(
+        uint32_t RenderTargetMask,
+        const D3D12_CLEAR_DATA* pClearValues,
+        const uint32_t* pNumRegions,
+        const D3D12_BOX* const* ppRegions) override {
+        (void)RenderTargetMask; (void)pClearValues; (void)pNumRegions; (void)ppRegions;
+        m_recordedAsyncClearBoundRenderTargetCount++;
+    }
+
+    void ClearTextureSubresources(
+        uint32_t NumClearDescs,
+        const D3D12_CLEAR_TEXTURE_DESC* pClearDescs) override {
+        (void)pClearDescs;
+        m_recordedAsyncClearTextureCount += NumClearDescs;
+    }
+
+    void FillBuffers(
+        uint32_t NumFillDescs,
+        const D3D12_FILL_BUFFER_DESC* pFillDescs) override {
+        (void)pFillDescs;
+        m_recordedAsyncFillBuffersCount += NumFillDescs;
+    }
+
+    uint32_t GetRecordedAsyncCopyBufferCount() const noexcept { return m_recordedAsyncCopyBufferCount; }
+    uint32_t GetRecordedAsyncCopyTextureCount() const noexcept { return m_recordedAsyncCopyTextureCount; }
+    uint32_t GetRecordedAsyncCopyResourceCount() const noexcept { return m_recordedAsyncCopyResourceCount; }
+    uint32_t GetRecordedAsyncCopyTilesCount() const noexcept { return m_recordedAsyncCopyTilesCount; }
+    uint32_t GetRecordedAsyncResolveSubresourceCount() const noexcept { return m_recordedAsyncResolveSubresourceCount; }
+    uint32_t GetRecordedAsyncResolveQueryCount() const noexcept { return m_recordedAsyncResolveQueryCount; }
+    uint32_t GetRecordedAsyncClearBoundDepthStencilCount() const noexcept { return m_recordedAsyncClearBoundDepthStencilCount; }
+    uint32_t GetRecordedAsyncClearBoundRenderTargetCount() const noexcept { return m_recordedAsyncClearBoundRenderTargetCount; }
+    uint32_t GetRecordedAsyncClearTextureCount() const noexcept { return m_recordedAsyncClearTextureCount; }
+    uint32_t GetRecordedAsyncFillBuffersCount() const noexcept { return m_recordedAsyncFillBuffersCount; }
 
     const BackingMemory2Record& GetWorkGraphBackingMemory2() const noexcept { return m_backingMemory2; }
     size_t GetRecordedProgramRecord2Count() const noexcept { return m_recordedProgramRecords2.size(); }
