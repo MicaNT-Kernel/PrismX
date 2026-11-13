@@ -374,9 +374,17 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS86        = 125,
     D3D12_FEATURE_ABI_D3D12_OPTIONS87        = 126,
     D3D12_FEATURE_ABI_D3D12_OPTIONS88        = 127,
-    D3D12_FEATURE_ABI_ASYNC_COMMANDS         = 128,
-    D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS  = 129
+    D3D12_FEATURE_ABI_ASYNC_COMMANDS                      = 128,
+    D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS               = 129,
+    D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = 130
 };
+
+inline constexpr D3D12_FEATURE_ABI D3D12_FEATURE_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = static_cast<D3D12_FEATURE_ABI>(60);
+
+struct D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI {
+    uint32_t ComputeQueuesPer3DQueue;
+};
+using D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI;
 
 enum D3D12_ASYNC_COMMANDS_IMPL : uint32_t {
     D3D12_ASYNC_COMMANDS_IMPL_NOT_SUPPORTED = 0,
@@ -5451,7 +5459,7 @@ public:
             case D3D12_FEATURE_ABI_SHADER_MODEL: {
                 if (Size < sizeof(D3D12_FEATURE_DATA_SHADER_MODEL_ABI)) return E_INVALIDARG;
                 auto* sm = static_cast<D3D12_FEATURE_DATA_SHADER_MODEL_ABI*>(pData);
-                sm->HighestShaderModel = 0x69u; // SM 6.9
+                sm->HighestShaderModel = (sm->HighestShaderModel >= 0x6Au) ? 0x6Au : 0x69u; // SM 6.10 / SM 6.9
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_ROOT_SIGNATURE: {
@@ -5552,6 +5560,12 @@ public:
                 }
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI)) return E_INVALIDARG;
+                auto* p = static_cast<D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI*>(pData);
+                p->ComputeQueuesPer3DQueue = 4u;
+                return S_OK;
+            }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {
                 if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI)) return E_INVALIDARG;
                 auto* o16 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI*>(pData);
@@ -5600,6 +5614,11 @@ public:
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS21: {
+                if (Size == sizeof(D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI)) {
+                    auto* p = static_cast<D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI*>(pData);
+                    p->ComputeQueuesPer3DQueue = 4u;
+                    return S_OK;
+                }
                 if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI)) return E_INVALIDARG;
                 auto* o21 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI*>(pData);
                 o21->WorkGraphsTier                     = 11u; // Tier 1.1
@@ -9139,5 +9158,9 @@ using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_LINEAR_MAPPING_TOKEN;
 using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_BOX_MAPPING_TOKEN;
 using D3D12ComAbi::D3D12_EXECUTE_TILE_MAPPINGS_FLAGS;
 using D3D12ComAbi::D3D12_EXECUTE_TILE_MAPPINGS_FLAG_NONE;
+using D3D12ComAbi::D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS;
+using D3D12ComAbi::D3D12_FEATURE_HARDWARE_SCHEDULING_QUEUE_GROUPINGS;
+using D3D12ComAbi::D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI;
+using D3D12ComAbi::D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS;
 
 } // namespace prismx

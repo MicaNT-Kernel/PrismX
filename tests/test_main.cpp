@@ -14713,6 +14713,139 @@ int Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202_Architecture")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+    using namespace prismx::ShaderCompiler;
+    using namespace prismx::GpuDebug;
+
+    // 1. Verify all 18 official DirectXShaderCompiler container part FourCCs
+    PRISMX_ASSERT(PRISM_DFCC_Container == 0x43425844u);               // 'DXBC'
+    PRISMX_ASSERT(PRISM_DFCC_ResourceDef == 0x46454452u);             // 'RDEF'
+    PRISMX_ASSERT(PRISM_DFCC_InputSignature == 0x31475349u);          // 'ISG1'
+    PRISMX_ASSERT(PRISM_DFCC_OutputSignature == 0x3147534Fu);         // 'OSG1'
+    PRISMX_ASSERT(PRISM_DFCC_PatchConstantSignature == 0x31475350u);  // 'PSG1'
+    PRISMX_ASSERT(PRISM_DFCC_ShaderStatistics == 0x54415453u);        // 'STAT'
+    PRISMX_ASSERT(PRISM_DFCC_ShaderDebugInfoDXIL == 0x42444C49u);     // 'ILDB'
+    PRISMX_ASSERT(PRISM_DFCC_ShaderDebugName == 0x4E444C49u);         // 'ILDN'
+    PRISMX_ASSERT(PRISM_DFCC_FeatureInfo == 0x30494653u);             // 'SFI0'
+    PRISMX_ASSERT(PRISM_DFCC_PrivateData == 0x56495250u);             // 'PRIV'
+    PRISMX_ASSERT(PRISM_DFCC_RootSignature == 0x30535452u);           // 'RTS0'
+    PRISMX_ASSERT(PRISM_DFCC_DXIL == 0x4C495844u);                    // 'DXIL'
+    PRISMX_ASSERT(PRISM_DFCC_PipelineStateValidation == 0x30565350u); // 'PSV0'
+    PRISMX_ASSERT(PRISM_DFCC_RuntimeData == 0x54414452u);             // 'RDAT'
+    PRISMX_ASSERT(PRISM_DFCC_ShaderHash == 0x48534148u);              // 'HASH'
+    PRISMX_ASSERT(PRISM_DFCC_ShaderSourceInfo == 0x49435253u);        // 'SRCI'
+    PRISMX_ASSERT(PRISM_DFCC_ShaderPDBInfo == 0x49424450u);           // 'PDBI'
+    PRISMX_ASSERT(PRISM_DFCC_CompilerVersion == 0x53524556u);         // 'VERS'
+
+    // 2. Build SM 6.10 / DXIL 1.10 container with LinAlg, DebugBreak & Triangle Object Positions
+    std::vector<PrismDxilInstruction> ops = {
+        {PrismHlslIntrinsicOp::IOP_WaveActiveBallot,                                  0, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_WaveActiveSum,                                     1, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_WavePrefixSum,                                     2, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_WaveActiveMax,                                     3, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_QuadReadAcrossX,                                   4, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_CreateResourceFromHeap,                            5, 42, 0},
+        {PrismHlslIntrinsicOp::IOP_DebugBreak,                                        6, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_TriangleObjectPositions,                           7, 0, 0},
+        {PrismHlslIntrinsicOp::MOP_CandidateTriangleObjectPositions,                  8, 0, 0},
+        {PrismHlslIntrinsicOp::IOP_Dx__builtin_LinAlg_MatrixMatrixMultiplyAccumulate, 9, 0, 0}
+    };
+
+    uint64_t featFlags = PRISM_SHADER_FEATURE_WAVE_OPS |
+                         PRISM_SHADER_FEATURE_RAYTRACING_TIER_1_1 |
+                         PRISM_SHADER_FEATURE_SAMPLER_FEEDBACK |
+                         PRISM_SHADER_FEATURE_RESOURCE_DESCRIPTOR_HEAP |
+                         PRISM_SHADER_FEATURE_LINEAR_ALGEBRA |
+                         PRISM_SHADER_FEATURE_OPT_REQUIRES_GROUP |
+                         PRISM_SHADER_FEATURE_OPT_USES_DERIVATIVES |
+                         PRISM_SHADER_FEATURE_EXTENDED_COMMAND_INFO |
+                         PRISM_SHADER_FEATURE_SAMPLE_CMP_GRADIENT_OR_BIAS;
+
+    auto container610 = PrismWave32ShaderVM::BuildSm610DxilContainer(5 /*CS*/, featFlags, ops);
+    auto res610       = PrismWave32ShaderVM::ParseAndExecuteWave32Simd(container610.data(), container610.size());
+
+    // Assert container parts and validation
+    PRISMX_ASSERT(res610.dxilContainerValid);
+    PRISMX_ASSERT(res610.hasSfi0Part && res610.hasPsv0Part && res610.hasHashPart);
+    PRISMX_ASSERT(res610.hasRdatPart && res610.rdatPartCount == 4u);
+    PRISMX_ASSERT(res610.hasVersPart && res610.compilerVersionMajor == 1u && res610.compilerVersionMinor == 10u);
+    PRISMX_ASSERT(res610.compilerCommitCount == 2611u);
+    PRISMX_ASSERT(res610.hasDxilPart);
+
+    // Assert SM 6.10 & DXIL 1.10 versions
+    PRISMX_ASSERT(res610.shaderModelMajor == 6u && res610.shaderModelMinor == 10u);
+    PRISMX_ASSERT(res610.dxilVersionMajor == 1u && res610.dxilVersionMinor == 10u);
+    PRISMX_ASSERT(res610.featureFlags == featFlags);
+
+    // Assert instruction execution
+    PRISMX_ASSERT(res610.waveLaneCount == 32u && res610.activeBallotMask == 0xFFFFFFFFu);
+    PRISMX_ASSERT(res610.waveActiveSumResult == 528.0f);
+    PRISMX_ASSERT(res610.wavePrefixSumLane31 == 496.0f);
+    PRISMX_ASSERT(res610.waveActiveMaxResult == 32.0f);
+    PRISMX_ASSERT(res610.quadReadAcrossX_Lane0 == 2.0f);
+    PRISMX_ASSERT(res610.dynamicDescriptorHeapIndexBound == 42u);
+    PRISMX_ASSERT(res610.debugBreakEncountered == true);
+    PRISMX_ASSERT(res610.triangleObjectPositionsQueried == true);
+    PRISMX_ASSERT(res610.linAlgMmaResult == 1088.0f);
+
+    // 3. Test DirectX-Headers 1.620.2 Hardware Scheduling Queue Groupings & SM 6.10 Queries
+    PrismD3D12Device14CanonicalImpl dev;
+
+    D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS qg{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_HARDWARE_SCHEDULING_QUEUE_GROUPINGS, &qg, sizeof(qg));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(qg.ComputeQueuesPer3DQueue == 4u);
+
+    D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI qgAbi{};
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS, &qgAbi, sizeof(qgAbi));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(qgAbi.ComputeQueuesPer3DQueue == 4u);
+
+    // SM 6.10 support query
+    D3D12_FEATURE_DATA_SHADER_MODEL_ABI sm610Query{};
+    sm610Query.HighestShaderModel = 0x6Au; // SM 6.10
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_SHADER_MODEL, &sm610Query, sizeof(sm610Query));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(sm610Query.HighestShaderModel == 0x6Au);
+
+    // SM 6.9 backward-compatible query when zero initialized
+    D3D12_FEATURE_DATA_SHADER_MODEL_ABI smLegacyQuery{};
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_SHADER_MODEL, &smLegacyQuery, sizeof(smLegacyQuery));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(smLegacyQuery.HighestShaderModel == 0x69u);
+
+    // 4. Test DirectX-Headers 1.620.2 DRED / GpuDebug Dump File Format
+    PRISMX_ASSERT(sizeof(DX_DUMP_FILE_HEADER) == 256u);
+    PRISMX_ASSERT(DX_DUMP_FILE_SIGNATURE == 0x4770446Du); // 'mDpG'
+    PRISMX_ASSERT(DX_DUMP_FILE_VERSION == 1u);
+    PRISMX_ASSERT(DX_DUMP_FILE_SECTION_DEVICE_CONFIGURATION_DESC == 0x66437644u); // 'DvCf'
+    PRISMX_ASSERT(D3D12_MESSAGE_ID_DUMP_FILE_DRIVER_CONFIGURATION_NOT_AVAILABLE == 1524u);
+
+    DX_DUMP_FILE_HEADER dmp{};
+    dmp.Fields.Signature               = DX_DUMP_FILE_SIGNATURE;
+    dmp.Fields.Version                 = DX_DUMP_FILE_VERSION;
+    dmp.Fields.Guid.Data1              = 0x12345678u;
+    dmp.Fields.DeviceErrorCode         = 0x887A0006u; // DXGI_ERROR_DEVICE_HUNG
+    dmp.Fields.CreationTimeLow         = 0x1000u;
+    dmp.Fields.CreationTimeHigh        = 0x2000u;
+    dmp.Fields.UploadedToWatson        = 1u;
+    dmp.Fields.LiveDebuggingEndStatus  = LIVE_DEBUGGING_DONE;
+    dmp.Fields.ProcessId               = 9999u;
+    dmp.Fields.KernelModeDeviceHandle  = 0xABCDu;
+    dmp.Fields.WNFChangeStamp          = 100u;
+
+    PRISMX_ASSERT(dmp.Fields.ProcessId == 9999u);
+    PRISMX_ASSERT(dmp.Fields.KernelModeDeviceHandle == 0xABCDu);
+    PRISMX_ASSERT(dmp.Fields.WNFChangeStamp == 100u);
+    PRISMX_ASSERT(dmp.Fields.LiveDebuggingEndStatus == LIVE_DEBUGGING_DONE);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -14842,9 +14975,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (123/123)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (124/124)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

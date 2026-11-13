@@ -221,4 +221,56 @@ public:
     }
 };
 
+// ============================================================================
+// 4. DX Dump File Format & GPU Post-Mortem Diagnostics (DXDumpFileFormat.h)
+// ============================================================================
+namespace GpuDebug {
+
+enum LIVE_DEBUGGING_END_STATUS : uint32_t {
+    LIVE_DEBUGGING_NOT_DONE = 0,
+    LIVE_DEBUGGING_DONE     = 1
+};
+
+inline constexpr uint32_t DX_DUMP_FILE_SIGNATURE                          = 0x4770446Du; // 'mDpG'
+inline constexpr uint32_t DX_DUMP_FILE_VERSION                            = 1u;
+inline constexpr uint32_t DX_DUMP_FILE_HEADER_MAX_SIZE                    = 256u;
+inline constexpr uint32_t DX_DUMP_FILE_SECTION_DEVICE_CONFIGURATION_DESC  = 0x66437644u; // 'DvCf'
+
+#pragma pack(push, 1)
+struct DX_DUMP_FILE_HEADER {
+    struct HeaderFields {
+        uint32_t                  Signature;                 // DX_DUMP_FILE_SIGNATURE
+        uint32_t                  Version;                   // DX_DUMP_FILE_VERSION
+        GUID                      Guid;                      // Watson / TDR dump correlation
+        uint32_t                  DeviceErrorCode;           // Triggering error code
+        uint32_t                  CreationTimeLow;           // FILETIME Low
+        uint32_t                  CreationTimeHigh;          // FILETIME High
+        uint32_t                  UploadedToWatson;          // BOOL
+        LIVE_DEBUGGING_END_STATUS LiveDebuggingEndStatus;   // Completed before dump write
+        uint32_t                  ProcessId;                 // ID of owning process
+        uint32_t                  KernelModeDeviceHandle;    // Process-scoped D3DKMT handle
+        uint32_t                  WNFChangeStamp;            // WNF change stamp
+    };
+    union {
+        HeaderFields Fields;
+        uint8_t AllBytes[DX_DUMP_FILE_HEADER_MAX_SIZE];
+    };
+};
+#pragma pack(pop)
+static_assert(sizeof(DX_DUMP_FILE_HEADER) == DX_DUMP_FILE_HEADER_MAX_SIZE, "DX_DUMP_FILE_HEADER must be 256 bytes");
+
+} // namespace GpuDebug
+
+using GpuDebug::LIVE_DEBUGGING_END_STATUS;
+using GpuDebug::LIVE_DEBUGGING_NOT_DONE;
+using GpuDebug::LIVE_DEBUGGING_DONE;
+using GpuDebug::DX_DUMP_FILE_SIGNATURE;
+using GpuDebug::DX_DUMP_FILE_VERSION;
+using GpuDebug::DX_DUMP_FILE_HEADER_MAX_SIZE;
+using GpuDebug::DX_DUMP_FILE_SECTION_DEVICE_CONFIGURATION_DESC;
+using GpuDebug::DX_DUMP_FILE_HEADER;
+
+// Direct3D 12 SDK Layers Dump File Message ID (d3d12sdklayers.h parity)
+inline constexpr uint32_t D3D12_MESSAGE_ID_DUMP_FILE_DRIVER_CONFIGURATION_NOT_AVAILABLE = 1524u;
+
 } // namespace prismx
