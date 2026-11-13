@@ -49,8 +49,10 @@ inline constexpr IID OFFICIAL_IID_ID3D12Device15 =
     { 0x9320e6f6, 0x47e5, 0x4f4d, { 0xa5, 0x0f, 0x27, 0x05, 0x6e, 0x24, 0x22, 0x1d } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device16 =
     { 0x0f2f3f98, 0x65aa, 0x4dc6, { 0xbe, 0x64, 0x0c, 0xc1, 0x1d, 0x4d, 0x8a, 0x4b } };
+inline constexpr IID IID_ID3D12Device16 = OFFICIAL_IID_ID3D12Device16;
 inline constexpr IID OFFICIAL_IID_ID3D12Device17 =
     { 0x8e89f81d, 0x6663, 0x455b, { 0xb9, 0xd9, 0x0b, 0x79, 0x37, 0x5e, 0x11, 0x04 } };
+inline constexpr IID IID_ID3D12Device17 = OFFICIAL_IID_ID3D12Device17;
 inline constexpr IID OFFICIAL_IID_ID3D12Device18 =
     { 0x77626941, 0xc68c, 0x4c67, { 0x91, 0x04, 0x58, 0x5b, 0x53, 0x77, 0xcf, 0xf8 } };
 inline constexpr IID OFFICIAL_IID_ID3D12Device19 =
@@ -280,6 +282,7 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS13        = 43,
     D3D12_FEATURE_ABI_D3D12_OPTIONS14        = 44,
     D3D12_FEATURE_ABI_D3D12_OPTIONS15        = 45,
+    D3D12_FEATURE_ABI_EXPLICIT_PSDBS         = 48,
     D3D12_FEATURE_ABI_D3D12_OPTIONS16        = 49,
     D3D12_FEATURE_ABI_D3D12_OPTIONS17        = 50,
     D3D12_FEATURE_ABI_D3D12_OPTIONS18        = 51,
@@ -443,6 +446,10 @@ struct D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI {
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI {
     int32_t DynamicDepthBiasSupported; // 1 (TRUE)
     int32_t GPUUploadHeapSupported;    // 1 (TRUE - 16 GB ReBAR)
+};
+
+struct D3D12_FEATURE_DATA_EXPLICIT_PSDBS_ABI {
+    int32_t ExplicitPsdbsSupported;    // 1 (TRUE)
 };
 
 struct D3D12_RANGE {
@@ -2032,6 +2039,11 @@ public:
         ID3D12Resource* pTargetedResource,
         ID3D12Resource* pFeedbackResource,
         D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) = 0;
+
+    virtual HRESULT CreateShaderCacheSession1(
+        const void* pDesc,
+        const IID& riid,
+        void** ppSession) = 0;
 };
 
 class ID3D12Device17 : public ID3D12Device16 {
@@ -2044,6 +2056,13 @@ public:
     virtual HRESULT SetWorkGraphProgramRecord(
         uint32_t ProgramIndex,
         const void* pRecord) = 0;
+
+    virtual HRESULT SetDefaultPrecompiledShaderCacheSession(
+        void* pSession,
+        uint32_t Flags) = 0;
+
+    virtual HRESULT GetDefaultPrecompiledShaderCacheSession(
+        void** ppSession) = 0;
 };
 
 class ID3D12Device18 : public ID3D12Device17 {
@@ -4880,6 +4899,8 @@ class PrismD3D12Device14CanonicalImpl : public ID3D12Device76 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
     ComPtr<ID3D12Device>  m_innerDevice;
+    ComPtr<IUnknown>      m_defaultPsdbSession;
+    uint32_t              m_psdbFlags{ 0 };
 
 public:
     PrismD3D12Device14CanonicalImpl() {
@@ -4905,7 +4926,9 @@ public:
             riid == OFFICIAL_IID_ID3D12Device14Alt ||
             riid == OFFICIAL_IID_ID3D12Device15 ||
             riid == OFFICIAL_IID_ID3D12Device16 ||
+            riid == IID_ID3D12Device16 ||
             riid == OFFICIAL_IID_ID3D12Device17 ||
+            riid == IID_ID3D12Device17 ||
             riid == OFFICIAL_IID_ID3D12Device18 ||
             riid == OFFICIAL_IID_ID3D12Device19 ||
             riid == OFFICIAL_IID_ID3D12Device20 ||
@@ -5171,6 +5194,12 @@ public:
                 auto* o15 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS15_ABI*>(pData);
                 o15->TriangleFanSupported       = 1;
                 o15->DynamicIndexBufferStripCut = D3D12_DYNAMIC_INDEX_BUFFER_STRIP_CUT_SUPPORTED_ALL;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_EXPLICIT_PSDBS: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_EXPLICIT_PSDBS_ABI)) return E_INVALIDARG;
+                auto* p = static_cast<D3D12_FEATURE_DATA_EXPLICIT_PSDBS_ABI*>(pData);
+                p->ExplicitPsdbsSupported = 1;
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {
@@ -6659,6 +6688,16 @@ public:
         return S_OK;
     }
 
+    HRESULT CreateShaderCacheSession1(
+        const void* pDesc,
+        const IID& riid,
+        void** ppSession) override {
+        (void)pDesc; (void)riid;
+        if (!ppSession) return E_POINTER;
+        *ppSession = nullptr;
+        return S_OK;
+    }
+
     HRESULT CreateWorkGraphProgramRecord(const void* pDesc, const IID& riid, void** ppRecord) override {
         (void)pDesc; (void)riid;
         if (!ppRecord) return E_POINTER;
@@ -6667,6 +6706,20 @@ public:
     }
     HRESULT SetWorkGraphProgramRecord(uint32_t ProgramIndex, const void* pRecord) override {
         (void)ProgramIndex; (void)pRecord;
+        return S_OK;
+    }
+    HRESULT SetDefaultPrecompiledShaderCacheSession(
+        void* pSession,
+        uint32_t Flags) override {
+        m_defaultPsdbSession = static_cast<IUnknown*>(pSession);
+        m_psdbFlags = Flags;
+        return S_OK;
+    }
+    HRESULT GetDefaultPrecompiledShaderCacheSession(
+        void** ppSession) override {
+        if (!ppSession) return E_POINTER;
+        *ppSession = m_defaultPsdbSession.Get();
+        if (*ppSession) static_cast<IUnknown*>(*ppSession)->AddRef();
         return S_OK;
     }
     HRESULT CreateWorkGraphProgramRecord2(const void* pDesc, uint32_t Flags, const IID& riid, void** ppRecord) override {

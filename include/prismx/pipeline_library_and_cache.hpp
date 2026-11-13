@@ -318,6 +318,180 @@ public:
 };
 
 // ============================================================================
+// 3b. Precompiled Shader Database (PSDB) & ShaderCacheSession1 (Agility SDK 1.620+ / D3D12Device17)
+// ============================================================================
+
+enum D3D12_SHADER_CACHE_KIND_FLAGS : uint32_t {
+    D3D12_SHADER_CACHE_KIND_FLAG_NONE                       = 0,
+    D3D12_SHADER_CACHE_KIND_FLAG_IMPLICIT_D3D_CACHE_SESSION = 0x01,
+    D3D12_SHADER_CACHE_KIND_FLAG_IMPLICIT_DRIVER_MANAGED   = 0x02,
+    D3D12_SHADER_CACHE_KIND_FLAG_APPLICATION_MANAGED       = 0x04
+};
+
+enum D3D12_SHADER_CACHE_SESSION_SUBOBJECT_FLAGS : uint32_t {
+    D3D12_SHADER_CACHE_SESSION_SUBOBJECT_FLAG_NONE   = 0,
+    D3D12_SHADER_CACHE_SESSION_SUBOBJECT_FLAG_RETAIN = 1
+};
+
+struct D3D12_SHADER_CACHE_SESSION_FILE_DESC {
+    const wchar_t* pFilename{ nullptr };
+    uint32_t       Flags{ 0 };
+};
+
+struct D3D12_SHADER_CACHE_SESSION_DESC1 {
+    GUID                                 Identifier{};
+    D3D12_SHADER_CACHE_MODE              Mode{ D3D12_SHADER_CACHE_MODE_MEMORY };
+    D3D12_SHADER_CACHE_FLAGS             Flags{ D3D12_SHADER_CACHE_FLAG_NONE };
+    D3D12_SHADER_CACHE_KIND_FLAGS        KindFlags{ D3D12_SHADER_CACHE_KIND_FLAG_APPLICATION_MANAGED };
+    uint32_t                             MaximumInMemoryCacheSizeBytes{ 0 };
+    uint32_t                             MaximumInMemoryCacheEntries{ 0 };
+    uint32_t                             MaximumValueFileSizeBytes{ 0 };
+    D3D12_SHADER_CACHE_SESSION_FILE_DESC FileDesc{};
+};
+
+struct D3D12_FEATURE_DATA_EXPLICIT_PSDBS {
+    int32_t ExplicitPsdbsSupported{ 1 };
+};
+
+inline constexpr IID OFFICIAL_IID_ID3D12ShaderCacheSession1 =
+    { 0x6a05e27a, 0x1d7c, 0x4f26, { 0x82, 0x40, 0x76, 0x88, 0x22, 0x11, 0x33, 0x55 } };
+
+class ID3D12ShaderCacheSession1 : public ID3D12ShaderCacheSession {
+public:
+    virtual int32_t FindValue1(const void* pKey, uint32_t KeySize, void* pValue, uint32_t* pValueSize) = 0;
+    virtual int32_t StoreValue1(const void* pKey, uint32_t KeySize, const void* pValue, uint32_t ValueSize) = 0;
+    virtual int32_t LoadPrecompiledShaderDatabase(const wchar_t* pFilename) = 0;
+    virtual size_t  GetPrecompiledEntryCount() const = 0;
+};
+
+class Prism3D12ShaderCacheSession1Impl : public ID3D12ShaderCacheSession1 {
+private:
+    std::atomic<uint32_t> m_refCount{ 1 };
+    ID3D12Device* m_pDevice{ nullptr };
+    D3D12_SHADER_CACHE_SESSION_DESC1 m_desc1{};
+    std::map<std::vector<uint8_t>, std::vector<uint8_t>> m_cache;
+    size_t m_precompiledEntries{ 0 };
+
+    static constexpr uint32_t PSDB_MAGIC = 0x50534442; // 'PSDB'
+
+public:
+    Prism3D12ShaderCacheSession1Impl(ID3D12Device* pDev, const D3D12_SHADER_CACHE_SESSION_DESC1& desc)
+        : m_pDevice(pDev), m_desc1(desc) {
+        if (desc.FileDesc.pFilename) {
+            LoadPrecompiledShaderDatabase(desc.FileDesc.pFilename);
+        }
+    }
+
+    int32_t QueryInterface(const IID& riid, void** ppv) override {
+        if (!ppv) return -1;
+        if (riid == IID_IUnknown || riid == IID_ID3D12Object || riid == IID_ID3D12DeviceChild ||
+            riid == D3D12ComAbi::OFFICIAL_IID_ID3D12ShaderCacheSession ||
+            riid == OFFICIAL_IID_ID3D12ShaderCacheSession1) {
+            *ppv = static_cast<ID3D12ShaderCacheSession1*>(this);
+            AddRef();
+            return 0;
+        }
+        *ppv = nullptr;
+        return -2147467262; // E_NOINTERFACE
+    }
+
+    uint32_t AddRef() override { return ++m_refCount; }
+    uint32_t Release() override {
+        uint32_t c = --m_refCount;
+        if (c == 0) delete this;
+        return c;
+    }
+
+    int32_t GetPrivateData(const IID&, uint32_t*, void*) override { return 0; }
+    int32_t SetPrivateData(const IID&, uint32_t, const void*) override { return 0; }
+    int32_t SetPrivateDataInterface(const IID&, const IUnknown*) override { return 0; }
+    int32_t SetName(const wchar_t*) override { return 0; }
+    int32_t GetDevice(const IID&, void** ppDevice) override {
+        if (!ppDevice) return -1;
+        *ppDevice = m_pDevice;
+        if (m_pDevice) m_pDevice->AddRef();
+        return 0;
+    }
+
+    int32_t FindValue(const void* pKey, uint32_t KeySize, void* pValue, uint32_t* pValueSize) override {
+        return FindValue1(pKey, KeySize, pValue, pValueSize);
+    }
+
+    int32_t StoreValue(const void* pKey, uint32_t KeySize, const void* pValue, uint32_t ValueSize) override {
+        return StoreValue1(pKey, KeySize, pValue, ValueSize);
+    }
+
+    void SetDeleteOnDestroy() override {}
+
+    D3D12_SHADER_CACHE_SESSION_DESC GetDesc() override {
+        D3D12_SHADER_CACHE_SESSION_DESC legacyDesc{};
+        legacyDesc.Identifier = m_desc1.Identifier;
+        legacyDesc.Mode = m_desc1.Mode;
+        legacyDesc.Flags = m_desc1.Flags;
+        legacyDesc.MaximumInMemoryCacheSizeBytes = m_desc1.MaximumInMemoryCacheSizeBytes;
+        legacyDesc.MaximumInMemoryCacheEntries = m_desc1.MaximumInMemoryCacheEntries;
+        legacyDesc.MaximumValueFileSizeBytes = m_desc1.MaximumValueFileSizeBytes;
+        return legacyDesc;
+    }
+
+    int32_t FindValue1(const void* pKey, uint32_t KeySize, void* pValue, uint32_t* pValueSize) override {
+        if (!pKey || KeySize == 0 || !pValueSize) return -1;
+        const auto* kptr = reinterpret_cast<const uint8_t*>(pKey);
+        std::vector<uint8_t> key(kptr, kptr + KeySize);
+        auto it = m_cache.find(key);
+        if (it == m_cache.end()) return -2147024894; // E_FILENOTFOUND
+        if (!pValue || *pValueSize < it->second.size()) {
+            *pValueSize = static_cast<uint32_t>(it->second.size());
+            return 1; // S_FALSE / buffer too small
+        }
+        std::memcpy(pValue, it->second.data(), it->second.size());
+        *pValueSize = static_cast<uint32_t>(it->second.size());
+        return 0;
+    }
+
+    int32_t StoreValue1(const void* pKey, uint32_t KeySize, const void* pValue, uint32_t ValueSize) override {
+        if (!pKey || KeySize == 0 || !pValue || ValueSize == 0) return -1;
+        const auto* kptr = reinterpret_cast<const uint8_t*>(pKey);
+        const auto* vptr = reinterpret_cast<const uint8_t*>(pValue);
+        m_cache[std::vector<uint8_t>(kptr, kptr + KeySize)] = std::vector<uint8_t>(vptr, vptr + ValueSize);
+        return 0;
+    }
+
+    int32_t LoadPrecompiledShaderDatabase(const wchar_t* pFilename) override {
+        if (!pFilename) return -1;
+        std::string fn;
+        for (const wchar_t* p = pFilename; *p; ++p) fn.push_back(static_cast<char>(*p));
+        FILE* fp = std::fopen(fn.c_str(), "rb");
+        if (!fp) return 0;
+
+        uint32_t header[3]{};
+        if (std::fread(header, sizeof(uint32_t), 3, fp) == 3 && header[0] == PSDB_MAGIC) {
+            uint32_t count = header[2];
+            for (uint32_t i = 0; i < count; ++i) {
+                uint32_t kSize = 0;
+                if (std::fread(&kSize, sizeof(uint32_t), 1, fp) != 1) break;
+                std::vector<uint8_t> k(kSize);
+                if (std::fread(k.data(), 1, kSize, fp) != kSize) break;
+
+                uint32_t vSize = 0;
+                if (std::fread(&vSize, sizeof(uint32_t), 1, fp) != 1) break;
+                std::vector<uint8_t> v(vSize);
+                if (std::fread(v.data(), 1, vSize, fp) != vSize) break;
+
+                m_cache[std::move(k)] = std::move(v);
+                m_precompiledEntries++;
+            }
+        }
+        std::fclose(fp);
+        return 0;
+    }
+
+    size_t GetPrecompiledEntryCount() const override {
+        return m_precompiledEntries;
+    }
+};
+
+// ============================================================================
 // 4. Agility SDK 1.614+ Resource Creation & Extended Mip Regions
 // ============================================================================
 

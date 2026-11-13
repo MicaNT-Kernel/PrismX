@@ -14214,6 +14214,130 @@ int Test_PrismX_Official_D3D12_Device73_CommandList67_And_Options85_Architecture
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Verify D3D12_FEATURE_ABI_EXPLICIT_PSDBS support
+    D3D12_FEATURE_DATA_EXPLICIT_PSDBS_ABI psdbFeature{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_EXPLICIT_PSDBS, &psdbFeature, sizeof(psdbFeature));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(psdbFeature.ExplicitPsdbsSupported == 1);
+
+    // 2. Query ID3D12Device17 interface
+    ID3D12Device17* pDev17 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device17, reinterpret_cast<void**>(&pDev17));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev17 != nullptr);
+
+    // 3. Generate a precompiled shader database (.psdb) file
+    const char* psdbFilePath = "test_pipeline_cache.psdb";
+    FILE* fp = std::fopen(psdbFilePath, "wb");
+    PRISMX_ASSERT(fp != nullptr);
+
+    // Header: Magic ('PSDB'), Version (1), Entry Count (2)
+    uint32_t header[3] = { 0x50534442, 1, 2 };
+    std::fwrite(header, sizeof(uint32_t), 3, fp);
+
+    // Entry 1: Key (8 bytes) + Value (32 bytes)
+    const uint8_t key1[8] = { 0xAA, 0x11, 0xBB, 0x22, 0xCC, 0x33, 0xDD, 0x44 };
+    const char val1[32] = "PRISMX_PREWARMED_SM69_PSO_VK01";
+    uint32_t kSize1 = sizeof(key1);
+    uint32_t vSize1 = sizeof(val1);
+    std::fwrite(&kSize1, sizeof(uint32_t), 1, fp);
+    std::fwrite(key1, 1, kSize1, fp);
+    std::fwrite(&vSize1, sizeof(uint32_t), 1, fp);
+    std::fwrite(val1, 1, vSize1, fp);
+
+    // Entry 2: Key (8 bytes) + Value (32 bytes)
+    const uint8_t key2[8] = { 0xEE, 0x55, 0xFF, 0x66, 0x11, 0x77, 0x22, 0x88 };
+    const char val2[32] = "PRISMX_PREWARMED_SM69_PSO_VK02";
+    uint32_t kSize2 = sizeof(key2);
+    uint32_t vSize2 = sizeof(val2);
+    std::fwrite(&kSize2, sizeof(uint32_t), 1, fp);
+    std::fwrite(key2, 1, kSize2, fp);
+    std::fwrite(&vSize2, sizeof(uint32_t), 1, fp);
+    std::fwrite(val2, 1, vSize2, fp);
+
+    std::fclose(fp);
+
+    // 4. Ingest PSDB via ID3D12ShaderCacheSession1
+    D3D12_SHADER_CACHE_SESSION_DESC1 desc1{};
+    desc1.Mode = D3D12_SHADER_CACHE_MODE_DISK;
+    desc1.KindFlags = D3D12_SHADER_CACHE_KIND_FLAG_APPLICATION_MANAGED;
+    desc1.FileDesc.pFilename = L"test_pipeline_cache.psdb";
+
+    auto* pSession1 = new Prism3D12ShaderCacheSession1Impl(reinterpret_cast<ID3D12Device*>(&dev), desc1);
+    PRISMX_ASSERT(pSession1->GetPrecompiledEntryCount() == 2);
+
+    // 5. Zero-latency lookup from precompiled database (anti-stutter fast path)
+    char retrievedShader[64]{};
+    uint32_t retrievedSize = sizeof(retrievedShader);
+    hr = pSession1->FindValue1(key1, sizeof(key1), retrievedShader, &retrievedSize);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(retrievedSize == 32);
+    PRISMX_ASSERT(std::memcmp(retrievedShader, val1, 32) == 0);
+
+    retrievedSize = sizeof(retrievedShader);
+    hr = pSession1->FindValue1(key2, sizeof(key2), retrievedShader, &retrievedSize);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(retrievedSize == 32);
+    PRISMX_ASSERT(std::memcmp(retrievedShader, val2, 32) == 0);
+
+    // 6. Dynamic Store & Query
+    const uint8_t dynKey[8] = { 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0 };
+    const char dynVal[32] = "PRISMX_JIT_COMPUTE_PIPELINE";
+    hr = pSession1->StoreValue1(dynKey, sizeof(dynKey), dynVal, sizeof(dynVal));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    retrievedSize = sizeof(retrievedShader);
+    hr = pSession1->FindValue1(dynKey, sizeof(dynKey), retrievedShader, &retrievedSize);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(std::memcmp(retrievedShader, dynVal, sizeof(dynVal)) == 0);
+
+    // 7. Associate default precompiled shader cache session with ID3D12Device17
+    hr = pDev17->SetDefaultPrecompiledShaderCacheSession(pSession1, D3D12_SHADER_CACHE_SESSION_SUBOBJECT_FLAG_RETAIN);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    void* pRetrievedDefault = nullptr;
+    hr = pDev17->GetDefaultPrecompiledShaderCacheSession(&pRetrievedDefault);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pRetrievedDefault == static_cast<void*>(static_cast<IUnknown*>(pSession1)));
+    static_cast<IUnknown*>(pRetrievedDefault)->Release();
+
+    // 8. Clear default session
+    hr = pDev17->SetDefaultPrecompiledShaderCacheSession(nullptr, D3D12_SHADER_CACHE_SESSION_SUBOBJECT_FLAG_NONE);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    pRetrievedDefault = nullptr;
+    hr = pDev17->GetDefaultPrecompiledShaderCacheSession(&pRetrievedDefault);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pRetrievedDefault == nullptr);
+
+    // 9. QueryInterface on session to verify IID_ID3D12ShaderCacheSession1 and IID_ID3D12ShaderCacheSession
+    void* pQueriedSession = nullptr;
+    hr = pSession1->QueryInterface(OFFICIAL_IID_ID3D12ShaderCacheSession1, &pQueriedSession);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pQueriedSession != nullptr);
+    static_cast<IUnknown*>(pQueriedSession)->Release();
+
+    hr = pSession1->QueryInterface(OFFICIAL_IID_ID3D12ShaderCacheSession, &pQueriedSession);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pQueriedSession != nullptr);
+    static_cast<IUnknown*>(pQueriedSession)->Release();
+
+    // 10. Clean up
+    pSession1->Release();
+    pDev17->Release();
+    std::remove(psdbFilePath);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -14340,9 +14464,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device74_CommandList68_And_Options86_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device75_CommandList69_And_Options87_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device76_CommandList70_And_Options88_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (120/120)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (121/121)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
