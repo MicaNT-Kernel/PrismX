@@ -9,6 +9,7 @@
 #include <cstring>
 #include <atomic>
 #include <vector>
+#include <unordered_map>
 
 #include "types.hpp"
 #include "d3d12.hpp"
@@ -275,6 +276,10 @@ inline constexpr IID OFFICIAL_IID_ID3D12SDKConfiguration =
 inline constexpr IID OFFICIAL_IID_ID3D12ManualWriteTrackingResource =
     { 0x86ca3b85, 0x49ad, 0x4b6e, { 0xae, 0xd5, 0xed, 0xdb, 0x18, 0x54, 0x0f, 0x41 } };
 
+inline constexpr IID OFFICIAL_IID_ID3D12TileMappingQueue =
+    { 0x3d120000, 0x711e, 0x4a99, { 0x88, 0x12, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 } };
+inline constexpr IID IID_ID3D12TileMappingQueue = OFFICIAL_IID_ID3D12TileMappingQueue;
+
 // ============================================================================
 // 2. Official D3D12_FEATURE Enum & CheckFeatureSupport Data Structures
 // ============================================================================
@@ -369,7 +374,8 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS86        = 125,
     D3D12_FEATURE_ABI_D3D12_OPTIONS87        = 126,
     D3D12_FEATURE_ABI_D3D12_OPTIONS88        = 127,
-    D3D12_FEATURE_ABI_ASYNC_COMMANDS         = 128
+    D3D12_FEATURE_ABI_ASYNC_COMMANDS         = 128,
+    D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS  = 129
 };
 
 enum D3D12_ASYNC_COMMANDS_IMPL : uint32_t {
@@ -380,6 +386,65 @@ enum D3D12_ASYNC_COMMANDS_IMPL : uint32_t {
 
 struct D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI {
     D3D12_ASYNC_COMMANDS_IMPL Impl;
+};
+
+struct D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI {
+    uint32_t NodeIndex;
+    uint32_t MaxTilePoolLayoutIndexCount;
+    uint32_t MaxResourceLayoutIndexCount;
+};
+using D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS = D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI;
+inline constexpr D3D12_FEATURE_ABI D3D12_FEATURE_EXECUTE_TILE_MAPPINGS = D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS;
+
+enum D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPES : uint32_t {
+    D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_NO_OPERATION   = 1,
+    D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_LINEAR_MAPPING = 128,
+    D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_BOX_MAPPING    = 129
+};
+
+struct D3D12_EXECUTETILEMAPPINGS_MAPPING_TOKEN_HEADER {
+    uint32_t TokenType : 8;
+    uint32_t MappingType : 8;
+    uint32_t SubresourceIndex : 16;
+};
+
+enum D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPES : uint32_t {
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_INCREMENTING_TILE_INDICES = 0,
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_NULL                      = 1,
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_SKIP                      = 2,
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_REUSE_SINGLE_TILE         = 3,
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_TILE_INDEX_LIST           = 4
+};
+
+struct D3D12_EXECUTETILEMAPPINGS_LINEAR_MAPPING_TOKEN {
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TOKEN_HEADER Header;
+    uint32_t TilePoolBaseOffsetInTiles;
+    uint32_t SubresourceBaseOffsetInTiles;
+    uint32_t TileCount;
+    uint32_t _Padding;
+    uint32_t TilePoolLayoutIndex;
+    uint32_t ResourceLayoutIndex;
+    uint32_t TileListOffsetDwords;
+};
+static_assert(sizeof(D3D12_EXECUTETILEMAPPINGS_LINEAR_MAPPING_TOKEN) == 32, "Linear mapping token must be 32 bytes (8 DWORDs)");
+
+struct D3D12_EXECUTETILEMAPPINGS_BOX_MAPPING_TOKEN {
+    D3D12_EXECUTETILEMAPPINGS_MAPPING_TOKEN_HEADER Header;
+    uint32_t TilePoolBaseOffsetInTiles;
+    uint16_t X;
+    uint16_t Y;
+    uint16_t Z;
+    uint16_t Width;
+    uint16_t Height;
+    uint16_t Depth;
+    uint32_t TilePoolLayoutIndex;
+    uint32_t ResourceLayoutIndex;
+    uint32_t TileListOffsetDwords;
+};
+static_assert(sizeof(D3D12_EXECUTETILEMAPPINGS_BOX_MAPPING_TOKEN) == 32, "Box mapping token must be 32 bytes (8 DWORDs)");
+
+enum D3D12_EXECUTE_TILE_MAPPINGS_FLAGS : uint32_t {
+    D3D12_EXECUTE_TILE_MAPPINGS_FLAG_NONE = 0
 };
 
 struct D3D12_FEATURE_DATA_D3D12_OPTIONS_ABI {
@@ -1849,6 +1914,27 @@ struct D3D12_RESOURCE_ALLOCATION_INFO_ABI {
 
 using ID3D12Pageable = ID3D12DeviceChild;
 
+class ID3D12TileMappingQueue : public ID3D12Pageable {
+public:
+    virtual void ExecuteTileMappings(
+        uint32_t MaxArgumentDwordCount,
+        ID3D12Resource* pArgumentBuffer,
+        uint64_t ArgumentBufferOffset,
+        ID3D12Resource* pCountBuffer,
+        uint64_t CountBufferOffset,
+        ID3D12Resource* pTileListBuffer,
+        uint64_t TileListBufferOffset,
+        D3D12_EXECUTE_TILE_MAPPINGS_FLAGS Flags) = 0;
+
+    virtual HRESULT Signal(
+        ID3D12Fence* pFence,
+        uint64_t Value) = 0;
+
+    virtual HRESULT Wait(
+        ID3D12Fence* pFence,
+        uint64_t Value) = 0;
+};
+
 class ID3D12DeviceCanonicalVTable : public ID3D12Object {
 public:
     // Slot 7: GetNodeCount
@@ -2117,6 +2203,38 @@ public:
     virtual HRESULT GetWorkGraphMemoryRequirements(
         uint32_t ProgramIndex,
         void* pRequirements) = 0;
+
+    virtual HRESULT GetTileMappingQueue(
+        uint32_t NodeIndex,
+        const IID& riid,
+        void** ppQueue) = 0;
+
+    virtual HRESULT InitializeExecuteTileMappingLayoutTables(
+        uint32_t NodeIndex,
+        uint32_t TilePoolLayoutIndexCount,
+        uint32_t ResourceLayoutIndexCount) = 0;
+
+    virtual HRESULT RegisterResourceLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumResources,
+        ID3D12Resource* const* pReservedResourceArray,
+        const uint32_t* pResourceLayoutIndexArray) = 0;
+
+    virtual HRESULT RegisterHeapLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumHeaps,
+        ID3D12Heap* const* pHeapArray,
+        const uint32_t* pTilePoolLayoutIndexArray) = 0;
+
+    virtual HRESULT UnregisterResourceLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumResources,
+        ID3D12Resource* const* pReservedResourceArray) = 0;
+
+    virtual HRESULT UnregisterHeapLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumHeaps,
+        ID3D12Heap* const* pHeapArray) = 0;
 };
 
 class ID3D12Device19 : public ID3D12Device18 {
@@ -4978,6 +5096,107 @@ public:
     }
 };
 
+class PrismD3D12TileMappingQueueImpl : public ID3D12TileMappingQueue {
+private:
+    std::atomic<uint32_t> m_refCount{ 1 };
+    ID3D12Device*         m_pDevice{ nullptr };
+    uint32_t              m_nodeIndex{ 0 };
+
+public:
+    uint32_t m_executedBatchesCount{ 0 };
+    uint64_t m_totalArgumentDwords{ 0 };
+    uint32_t m_tokensProcessed{ 0 };
+    D3D12_EXECUTE_TILE_MAPPINGS_FLAGS m_lastFlags{ D3D12_EXECUTE_TILE_MAPPINGS_FLAG_NONE };
+    ID3D12Fence* m_lastSignaledFence{ nullptr };
+    uint64_t m_lastSignaledValue{ 0 };
+    ID3D12Fence* m_lastWaitedFence{ nullptr };
+    uint64_t m_lastWaitedValue{ 0 };
+
+    PrismD3D12TileMappingQueueImpl(ID3D12Device* pDev, uint32_t nodeIndex)
+        : m_pDevice(pDev), m_nodeIndex(nodeIndex) {}
+
+    uint32_t GetNodeIndex() const noexcept { return m_nodeIndex; }
+
+    HRESULT QueryInterface(const IID& riid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (riid == IID_IUnknown ||
+            riid == IID_ID3D12Object ||
+            riid == IID_ID3D12DeviceChild ||
+            riid == OFFICIAL_IID_ID3D12TileMappingQueue ||
+            riid == IID_ID3D12TileMappingQueue) {
+            *ppv = static_cast<ID3D12TileMappingQueue*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    uint32_t AddRef() override {
+        return m_refCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+
+    uint32_t Release() override {
+        uint32_t c = m_refCount.fetch_sub(1, std::memory_order_acq_rel);
+        if (c == 1) {
+            delete this;
+            return 0;
+        }
+        return c - 1;
+    }
+
+    int32_t GetPrivateData(const IID&, uint32_t* pDataSize, void*) override {
+        if (pDataSize) *pDataSize = 0;
+        return S_OK;
+    }
+    int32_t SetPrivateData(const IID&, uint32_t, const void*) override { return S_OK; }
+    int32_t SetPrivateDataInterface(const IID&, const IUnknown*) override { return S_OK; }
+    int32_t SetName(const wchar_t*) override { return S_OK; }
+
+    int32_t GetDevice(const IID& riid, void** ppDevice) override {
+        if (!ppDevice) return E_POINTER;
+        if (m_pDevice) return m_pDevice->QueryInterface(riid, ppDevice);
+        *ppDevice = nullptr;
+        return S_OK;
+    }
+
+    void ExecuteTileMappings(
+        uint32_t MaxArgumentDwordCount,
+        ID3D12Resource* pArgumentBuffer,
+        uint64_t ArgumentBufferOffset,
+        ID3D12Resource* pCountBuffer,
+        uint64_t CountBufferOffset,
+        ID3D12Resource* pTileListBuffer,
+        uint64_t TileListBufferOffset,
+        D3D12_EXECUTE_TILE_MAPPINGS_FLAGS Flags) override {
+        (void)pArgumentBuffer;
+        (void)ArgumentBufferOffset;
+        (void)pCountBuffer;
+        (void)CountBufferOffset;
+        (void)pTileListBuffer;
+        (void)TileListBufferOffset;
+        m_executedBatchesCount++;
+        m_totalArgumentDwords += MaxArgumentDwordCount;
+        m_tokensProcessed += (MaxArgumentDwordCount / 8);
+        m_lastFlags = Flags;
+    }
+
+    HRESULT Signal(ID3D12Fence* pFence, uint64_t Value) override {
+        if (pFence) {
+            pFence->Signal(Value);
+            m_lastSignaledFence = pFence;
+            m_lastSignaledValue = Value;
+        }
+        return S_OK;
+    }
+
+    HRESULT Wait(ID3D12Fence* pFence, uint64_t Value) override {
+        m_lastWaitedFence = pFence;
+        m_lastWaitedValue = Value;
+        return S_OK;
+    }
+};
+
 class PrismD3D12Device14CanonicalImpl : public ID3D12Device76 {
 private:
     std::atomic<uint32_t> m_refCount{ 1 };
@@ -4985,10 +5204,30 @@ private:
     ComPtr<IUnknown>      m_defaultPsdbSession;
     uint32_t              m_psdbFlags{ 0 };
 
+    struct NodeTileMappingLayoutState {
+        bool initialized{ false };
+        uint32_t tilePoolLayoutCount{ 0 };
+        uint32_t resourceLayoutCount{ 0 };
+        std::unordered_map<uint32_t, ID3D12Heap*> heapLayouts;
+        std::unordered_map<uint32_t, ID3D12Resource*> resourceLayouts;
+    };
+    std::unordered_map<uint32_t, NodeTileMappingLayoutState> m_tileMappingNodes;
+    std::unordered_map<uint32_t, ComPtr<ID3D12TileMappingQueue>> m_tileMappingQueues;
+
 public:
     int32_t               m_asyncCommandsFallbackEnabled{ 0 };
 
 public:
+    virtual ~PrismD3D12Device14CanonicalImpl() {
+        for (auto& node : m_tileMappingNodes) {
+            for (auto& pair : node.second.resourceLayouts) {
+                if (pair.second) pair.second->Release();
+            }
+            for (auto& pair : node.second.heapLayouts) {
+                if (pair.second) pair.second->Release();
+            }
+        }
+    }
     PrismD3D12Device14CanonicalImpl() {
         D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_2, IID_ID3D12Device, m_innerDevice.PutVoid());
     }
@@ -5299,6 +5538,18 @@ public:
                 if (Size < sizeof(D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI)) return E_INVALIDARG;
                 auto* p = static_cast<D3D12_FEATURE_DATA_ASYNC_COMMANDS_ABI*>(pData);
                 p->Impl = m_asyncCommandsFallbackEnabled ? D3D12_ASYNC_COMMANDS_IMPL_FALLBACK : D3D12_ASYNC_COMMANDS_IMPL_NATIVE;
+                return S_OK;
+            }
+            case D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI)) return E_INVALIDARG;
+                auto* p = static_cast<D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI*>(pData);
+                if (p->NodeIndex >= 1) {
+                    p->MaxTilePoolLayoutIndexCount = 0;
+                    p->MaxResourceLayoutIndexCount = 0;
+                } else {
+                    p->MaxTilePoolLayoutIndexCount = 1024;
+                    p->MaxResourceLayoutIndexCount = 1024;
+                }
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {
@@ -6831,6 +7082,191 @@ public:
         (void)ProgramIndex;
         if (!pRequirements) return E_INVALIDARG;
         *reinterpret_cast<uint64_t*>(pRequirements) = 65536ULL;
+        return S_OK;
+    }
+    HRESULT GetTileMappingQueue(
+        uint32_t NodeIndex,
+        const IID& riid,
+        void** ppQueue) override {
+        if (!ppQueue) return E_POINTER;
+        *ppQueue = nullptr;
+        if (NodeIndex >= 1) return E_INVALIDARG;
+        auto it = m_tileMappingNodes.find(NodeIndex);
+        if (it == m_tileMappingNodes.end() || !it->second.initialized) {
+            return E_FAIL;
+        }
+        auto qIt = m_tileMappingQueues.find(NodeIndex);
+        if (qIt == m_tileMappingQueues.end() || !qIt->second) {
+            auto* pNewQueue = new PrismD3D12TileMappingQueueImpl(m_innerDevice.Get(), NodeIndex);
+            m_tileMappingQueues[NodeIndex] = pNewQueue;
+            pNewQueue->Release();
+        }
+        return m_tileMappingQueues[NodeIndex]->QueryInterface(riid, ppQueue);
+    }
+    HRESULT InitializeExecuteTileMappingLayoutTables(
+        uint32_t NodeIndex,
+        uint32_t TilePoolLayoutIndexCount,
+        uint32_t ResourceLayoutIndexCount) override {
+        if (NodeIndex >= 1) return E_INVALIDARG;
+        auto& state = m_tileMappingNodes[NodeIndex];
+        if (state.initialized) {
+            return E_FAIL;
+        }
+        if (TilePoolLayoutIndexCount == 0 || TilePoolLayoutIndexCount > 1024 ||
+            ResourceLayoutIndexCount == 0 || ResourceLayoutIndexCount > 1024) {
+            return E_INVALIDARG;
+        }
+        state.initialized = true;
+        state.tilePoolLayoutCount = TilePoolLayoutIndexCount;
+        state.resourceLayoutCount = ResourceLayoutIndexCount;
+        return S_OK;
+    }
+    HRESULT RegisterResourceLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumResources,
+        ID3D12Resource* const* pReservedResourceArray,
+        const uint32_t* pResourceLayoutIndexArray) override {
+        if (NodeIndex >= 1) return E_INVALIDARG;
+        auto it = m_tileMappingNodes.find(NodeIndex);
+        if (it == m_tileMappingNodes.end() || !it->second.initialized) return E_FAIL;
+        auto& state = it->second;
+        if (NumResources == 0 || !pReservedResourceArray || !pResourceLayoutIndexArray) return E_INVALIDARG;
+
+        std::vector<uint32_t> batchIndices;
+        std::vector<ID3D12Resource*> batchResources;
+        batchIndices.reserve(NumResources);
+        batchResources.reserve(NumResources);
+
+        for (uint32_t i = 0; i < NumResources; ++i) {
+            if (!pReservedResourceArray[i]) return E_INVALIDARG;
+            uint32_t idx = pResourceLayoutIndexArray[i];
+            if (idx >= state.resourceLayoutCount) return E_INVALIDARG;
+            for (uint32_t j = 0; j < i; ++j) {
+                if (batchIndices[j] == idx) return E_INVALIDARG;
+                if (batchResources[j] == pReservedResourceArray[i]) return E_INVALIDARG;
+            }
+            if (state.resourceLayouts.find(idx) != state.resourceLayouts.end()) return E_INVALIDARG;
+            for (const auto& pair : state.resourceLayouts) {
+                if (pair.second == pReservedResourceArray[i]) return E_INVALIDARG;
+            }
+            batchIndices.push_back(idx);
+            batchResources.push_back(pReservedResourceArray[i]);
+        }
+        for (uint32_t i = 0; i < NumResources; ++i) {
+            state.resourceLayouts[batchIndices[i]] = batchResources[i];
+            batchResources[i]->AddRef();
+        }
+        return S_OK;
+    }
+    HRESULT RegisterHeapLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumHeaps,
+        ID3D12Heap* const* pHeapArray,
+        const uint32_t* pTilePoolLayoutIndexArray) override {
+        if (NodeIndex >= 1) return E_INVALIDARG;
+        auto it = m_tileMappingNodes.find(NodeIndex);
+        if (it == m_tileMappingNodes.end() || !it->second.initialized) return E_FAIL;
+        auto& state = it->second;
+        if (NumHeaps == 0 || !pHeapArray || !pTilePoolLayoutIndexArray) return E_INVALIDARG;
+
+        std::vector<uint32_t> batchIndices;
+        std::vector<ID3D12Heap*> batchHeaps;
+        batchIndices.reserve(NumHeaps);
+        batchHeaps.reserve(NumHeaps);
+
+        for (uint32_t i = 0; i < NumHeaps; ++i) {
+            if (!pHeapArray[i]) return E_INVALIDARG;
+            uint32_t idx = pTilePoolLayoutIndexArray[i];
+            if (idx >= state.tilePoolLayoutCount) return E_INVALIDARG;
+            for (uint32_t j = 0; j < i; ++j) {
+                if (batchIndices[j] == idx) return E_INVALIDARG;
+                if (batchHeaps[j] == pHeapArray[i]) return E_INVALIDARG;
+            }
+            if (state.heapLayouts.find(idx) != state.heapLayouts.end()) return E_INVALIDARG;
+            for (const auto& pair : state.heapLayouts) {
+                if (pair.second == pHeapArray[i]) return E_INVALIDARG;
+            }
+            batchIndices.push_back(idx);
+            batchHeaps.push_back(pHeapArray[i]);
+        }
+        for (uint32_t i = 0; i < NumHeaps; ++i) {
+            state.heapLayouts[batchIndices[i]] = batchHeaps[i];
+            batchHeaps[i]->AddRef();
+        }
+        return S_OK;
+    }
+    HRESULT UnregisterResourceLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumResources,
+        ID3D12Resource* const* pReservedResourceArray) override {
+        if (NodeIndex >= 1) return E_INVALIDARG;
+        auto it = m_tileMappingNodes.find(NodeIndex);
+        if (it == m_tileMappingNodes.end() || !it->second.initialized) return E_FAIL;
+        auto& state = it->second;
+        if (NumResources == 0 || !pReservedResourceArray) return E_INVALIDARG;
+
+        std::vector<uint32_t> toErase;
+        toErase.reserve(NumResources);
+
+        for (uint32_t i = 0; i < NumResources; ++i) {
+            if (!pReservedResourceArray[i]) return E_INVALIDARG;
+            for (uint32_t j = 0; j < i; ++j) {
+                if (pReservedResourceArray[j] == pReservedResourceArray[i]) return E_INVALIDARG;
+            }
+            bool found = false;
+            for (const auto& pair : state.resourceLayouts) {
+                if (pair.second == pReservedResourceArray[i]) {
+                    toErase.push_back(pair.first);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return E_INVALIDARG;
+        }
+        for (uint32_t idx : toErase) {
+            auto resIt = state.resourceLayouts.find(idx);
+            if (resIt != state.resourceLayouts.end()) {
+                resIt->second->Release();
+                state.resourceLayouts.erase(resIt);
+            }
+        }
+        return S_OK;
+    }
+    HRESULT UnregisterHeapLayouts(
+        uint32_t NodeIndex,
+        uint32_t NumHeaps,
+        ID3D12Heap* const* pHeapArray) override {
+        if (NodeIndex >= 1) return E_INVALIDARG;
+        auto it = m_tileMappingNodes.find(NodeIndex);
+        if (it == m_tileMappingNodes.end() || !it->second.initialized) return E_FAIL;
+        auto& state = it->second;
+        if (NumHeaps == 0 || !pHeapArray) return E_INVALIDARG;
+
+        std::vector<uint32_t> toErase;
+        toErase.reserve(NumHeaps);
+
+        for (uint32_t i = 0; i < NumHeaps; ++i) {
+            if (!pHeapArray[i]) return E_INVALIDARG;
+            for (uint32_t j = 0; j < i; ++j) {
+                if (pHeapArray[j] == pHeapArray[i]) return E_INVALIDARG;
+            }
+            bool found = false;
+            for (const auto& pair : state.heapLayouts) {
+                if (pair.second == pHeapArray[i]) {
+                    toErase.push_back(pair.first);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return E_INVALIDARG;
+        }
+        for (uint32_t idx : toErase) {
+            auto heapIt = state.heapLayouts.find(idx);
+            if (heapIt != state.heapLayouts.end()) {
+                heapIt->second->Release();
+                state.heapLayouts.erase(heapIt);
+            }
+        }
         return S_OK;
     }
     HRESULT CreateWorkGraphProgramRecord3(const void* pDesc, uint32_t Flags, uint64_t ScratchBufferSize, const IID& riid, void** ppRecord) override {
@@ -8452,7 +8888,17 @@ public:
     HRESULT CreateCommittedResource(const D3D12_HEAP_PROPERTIES* pHP, uint32_t flags, const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES state, const void* pClear, const IID& riid, void** ppv) override {
         return m_innerDevice->CreateCommittedResource(pHP, flags, pDesc, state, pClear, riid, ppv);
     }
-    HRESULT CreateHeap(const void*, const IID&, void** ppv) override { if (ppv) *ppv = nullptr; return S_OK; }
+    HRESULT CreateHeap(const void* pDesc, const IID& riid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        D3D12_HEAP_DESC desc{};
+        if (pDesc) {
+            desc = *reinterpret_cast<const D3D12_HEAP_DESC*>(pDesc);
+        }
+        auto* pHeap = new Prism3D12HeapImpl(m_innerDevice.Get(), desc);
+        HRESULT hr = pHeap->QueryInterface(riid, ppv);
+        pHeap->Release();
+        return hr;
+    }
     HRESULT CreatePlacedResource(void*, uint64_t, const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES state, const void* pClear, const IID& riid, void** ppv) override {
         D3D12_HEAP_PROPERTIES hp{ D3D12_HEAP_TYPE_DEFAULT, 0, 0, 1, 1 };
         return m_innerDevice->CreateCommittedResource(&hp, 0, pDesc, state, pClear, riid, ppv);
@@ -8669,4 +9115,29 @@ inline HRESULT D3D12GetInterfaceAbi(const IID& rclsid, const IID& riid, void** p
 }
 
 } // namespace D3D12ComAbi
+
+using D3D12ComAbi::ID3D12TileMappingQueue;
+using D3D12ComAbi::OFFICIAL_IID_ID3D12TileMappingQueue;
+using D3D12ComAbi::IID_ID3D12TileMappingQueue;
+using D3D12ComAbi::PrismD3D12TileMappingQueueImpl;
+using D3D12ComAbi::D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS;
+using D3D12ComAbi::D3D12_FEATURE_EXECUTE_TILE_MAPPINGS;
+using D3D12ComAbi::D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI;
+using D3D12ComAbi::D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPES;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_NO_OPERATION;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_LINEAR_MAPPING;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_BOX_MAPPING;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TOKEN_HEADER;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPES;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_INCREMENTING_TILE_INDICES;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_NULL;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_SKIP;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_REUSE_SINGLE_TILE;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_TILE_INDEX_LIST;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_LINEAR_MAPPING_TOKEN;
+using D3D12ComAbi::D3D12_EXECUTETILEMAPPINGS_BOX_MAPPING_TOKEN;
+using D3D12ComAbi::D3D12_EXECUTE_TILE_MAPPINGS_FLAGS;
+using D3D12ComAbi::D3D12_EXECUTE_TILE_MAPPINGS_FLAG_NONE;
+
 } // namespace prismx

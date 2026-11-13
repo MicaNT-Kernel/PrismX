@@ -14472,6 +14472,247 @@ int Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture")
+    using namespace prismx;
+    using namespace prismx::D3D12ComAbi;
+
+    PrismD3D12Device14CanonicalImpl dev;
+
+    // 1. Query CheckFeatureSupport for D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS
+    D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI featData{};
+    featData.NodeIndex = 0;
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS, &featData, sizeof(featData));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(featData.MaxTilePoolLayoutIndexCount == 1024);
+    PRISMX_ASSERT(featData.MaxResourceLayoutIndexCount == 1024);
+
+    // Invalid NodeIndex query returns 0 supported layouts
+    D3D12_FEATURE_DATA_EXECUTE_TILE_MAPPINGS_ABI invalidFeat{};
+    invalidFeat.NodeIndex = 1;
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS, &invalidFeat, sizeof(invalidFeat));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(invalidFeat.MaxTilePoolLayoutIndexCount == 0);
+    PRISMX_ASSERT(invalidFeat.MaxResourceLayoutIndexCount == 0);
+
+    // 2. Query ID3D12Device18 interface
+    ID3D12Device18* pDev18 = nullptr;
+    hr = dev.QueryInterface(OFFICIAL_IID_ID3D12Device18, reinterpret_cast<void**>(&pDev18));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pDev18 != nullptr);
+
+    // 3. Layout table initialization rules
+    // Calling GetTileMappingQueue prior to initialization must fail per spec
+    ID3D12TileMappingQueue* pTileQueue = nullptr;
+    hr = pDev18->GetTileMappingQueue(0, OFFICIAL_IID_ID3D12TileMappingQueue, reinterpret_cast<void**>(&pTileQueue));
+    PRISMX_ASSERT(FAILED(hr));
+
+    // Calling with zero count must fail with E_INVALIDARG
+    hr = pDev18->InitializeExecuteTileMappingLayoutTables(0, 0, 128);
+    PRISMX_ASSERT(FAILED(hr));
+    hr = pDev18->InitializeExecuteTileMappingLayoutTables(0, 128, 0);
+    PRISMX_ASSERT(FAILED(hr));
+
+    // Calling with count exceeding maximum must fail
+    hr = pDev18->InitializeExecuteTileMappingLayoutTables(0, 2048, 128);
+    PRISMX_ASSERT(FAILED(hr));
+
+    // Initialize layout tables successfully
+    hr = pDev18->InitializeExecuteTileMappingLayoutTables(0, 256, 256);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // Subsequent calls to initialize fixed tables for node must fail per spec
+    hr = pDev18->InitializeExecuteTileMappingLayoutTables(0, 256, 256);
+    PRISMX_ASSERT(FAILED(hr));
+
+    // 4. Acquire ID3D12TileMappingQueue now that tables are initialized
+    hr = pDev18->GetTileMappingQueue(0, OFFICIAL_IID_ID3D12TileMappingQueue, reinterpret_cast<void**>(&pTileQueue));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pTileQueue != nullptr);
+
+    // Verify queue implements ID3D12Pageable / ID3D12DeviceChild
+    ID3D12Pageable* pPageable = nullptr;
+    hr = pTileQueue->QueryInterface(IID_ID3D12DeviceChild, reinterpret_cast<void**>(&pPageable));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pPageable != nullptr);
+    pPageable->Release();
+
+    // Verify GetDevice on queue
+    ID3D12Device* pChildDev = nullptr;
+    hr = pTileQueue->GetDevice(IID_ID3D12Device, reinterpret_cast<void**>(&pChildDev));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    if (pChildDev) pChildDev->Release();
+
+    // 5. Create reserved resources and heaps with new Tier 5 flags
+    D3D12_RESOURCE_DESC resDesc{};
+    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    resDesc.Width = 1024;
+    resDesc.Height = 1024;
+    resDesc.DepthOrArraySize = 1;
+    resDesc.MipLevels = 1;
+    resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    resDesc.Layout = D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE;
+    resDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_EXECUTE_TILE_MAPPINGS;
+
+    ID3D12Resource* pResA = nullptr;
+    ID3D12Resource* pResB = nullptr;
+    hr = dev.CreateReservedResource(&resDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_ID3D12Resource, reinterpret_cast<void**>(&pResA));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pResA != nullptr);
+
+    hr = dev.CreateReservedResource(&resDesc, D3D12_RESOURCE_STATE_COMMON, nullptr, IID_ID3D12Resource, reinterpret_cast<void**>(&pResB));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pResB != nullptr);
+
+    D3D12_HEAP_DESC heapDesc{};
+    heapDesc.SizeInBytes = 4 * 1024 * 1024; // 4 MB tile pool
+    heapDesc.Alignment = 65536;
+    heapDesc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heapDesc.Flags = D3D12_HEAP_FLAG_ALLOW_EXECUTE_TILE_MAPPINGS;
+
+    ID3D12Heap* pHeapA = nullptr;
+    ID3D12Heap* pHeapB = nullptr;
+    hr = dev.CreateHeap(&heapDesc, IID_ID3D12Heap, reinterpret_cast<void**>(&pHeapA));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pHeapA != nullptr);
+    PRISMX_ASSERT(pHeapA->GetDesc().Flags == D3D12_HEAP_FLAG_ALLOW_EXECUTE_TILE_MAPPINGS);
+
+    hr = dev.CreateHeap(&heapDesc, IID_ID3D12Heap, reinterpret_cast<void**>(&pHeapB));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pHeapB != nullptr);
+
+    // 6. Test RegisterHeapLayouts and atomic batch validation
+    ID3D12Heap* heaps[2] = { pHeapA, pHeapB };
+    uint32_t duplicateIndices[2] = { 10, 10 };
+    hr = pDev18->RegisterHeapLayouts(0, 2, heaps, duplicateIndices);
+    PRISMX_ASSERT(FAILED(hr)); // duplicate index in batch rejected
+
+    uint32_t outOfBoundsIndices[2] = { 10, 300 };
+    hr = pDev18->RegisterHeapLayouts(0, 2, heaps, outOfBoundsIndices);
+    PRISMX_ASSERT(FAILED(hr)); // index >= 256 rejected
+
+    uint32_t validHeapIndices[2] = { 10, 20 };
+    hr = pDev18->RegisterHeapLayouts(0, 2, heaps, validHeapIndices);
+    PRISMX_ASSERT(SUCCEEDED(hr)); // atomically registered
+
+    // Re-registering already registered heap or index must fail
+    uint32_t conflictIndex[1] = { 10 };
+    ID3D12Heap* conflictHeap[1] = { pHeapA };
+    hr = pDev18->RegisterHeapLayouts(0, 1, conflictHeap, conflictIndex);
+    PRISMX_ASSERT(FAILED(hr));
+
+    // 7. Test RegisterResourceLayouts
+    ID3D12Resource* resources[2] = { pResA, pResB };
+    uint32_t validResIndices[2] = { 5, 15 };
+    hr = pDev18->RegisterResourceLayouts(0, 2, resources, validResIndices);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // 8. Construct Token Stream in Argument Buffer and Execute
+    // Token 0: NO_OPERATION (8 DWORDs / 32 bytes)
+    // Token 1: LINEAR_MAPPING (8 DWORDs / 32 bytes)
+    // Token 2: BOX_MAPPING (8 DWORDs / 32 bytes)
+    D3D12_EXECUTETILEMAPPINGS_LINEAR_MAPPING_TOKEN linearToken{};
+    linearToken.Header.TokenType = D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_LINEAR_MAPPING;
+    linearToken.Header.MappingType = D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_INCREMENTING_TILE_INDICES;
+    linearToken.Header.SubresourceIndex = 0;
+    linearToken.TilePoolBaseOffsetInTiles = 0;
+    linearToken.SubresourceBaseOffsetInTiles = 0;
+    linearToken.TileCount = 64;
+    linearToken.TilePoolLayoutIndex = 10;
+    linearToken.ResourceLayoutIndex = 5;
+    linearToken.TileListOffsetDwords = 0;
+
+    D3D12_EXECUTETILEMAPPINGS_BOX_MAPPING_TOKEN boxToken{};
+    boxToken.Header.TokenType = D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_BOX_MAPPING;
+    boxToken.Header.MappingType = D3D12_EXECUTETILEMAPPINGS_MAPPING_TYPE_REUSE_SINGLE_TILE;
+    boxToken.Header.SubresourceIndex = 1;
+    boxToken.TilePoolBaseOffsetInTiles = 16;
+    boxToken.X = 0; boxToken.Y = 0; boxToken.Z = 0;
+    boxToken.Width = 8; boxToken.Height = 8; boxToken.Depth = 1;
+    boxToken.TilePoolLayoutIndex = 20;
+    boxToken.ResourceLayoutIndex = 15;
+    boxToken.TileListOffsetDwords = 0;
+
+    D3D12_RESOURCE_DESC argBufDesc{};
+    argBufDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    argBufDesc.Width = 24 * sizeof(uint32_t); // 3 tokens * 8 DWORDs = 24 DWORDs (96 bytes)
+    argBufDesc.Height = 1;
+    argBufDesc.DepthOrArraySize = 1;
+    argBufDesc.MipLevels = 1;
+    argBufDesc.Format = DXGI_FORMAT_UNKNOWN;
+    argBufDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    argBufDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    ID3D12Resource* pArgBuffer = nullptr;
+    D3D12_HEAP_PROPERTIES uploadHeapProp{ D3D12_HEAP_TYPE_UPLOAD, 0, 0, 1, 1 };
+    hr = dev.CreateCommittedResource(&uploadHeapProp, 0, &argBufDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_ID3D12Resource, reinterpret_cast<void**>(&pArgBuffer));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pArgBuffer != nullptr);
+
+    // Write tokens into argument buffer
+    void* pMapped = nullptr;
+    hr = pArgBuffer->Map(0, nullptr, &pMapped);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    auto* pDwords = static_cast<uint32_t*>(pMapped);
+    // Token 0: NO_OPERATION (Header DWORD with TokenType=1, mappingType=0, subresource=0)
+    pDwords[0] = D3D12_EXECUTETILEMAPPINGS_TOKEN_TYPE_NO_OPERATION;
+    for (int k = 1; k < 8; ++k) pDwords[k] = 0;
+    // Token 1: LINEAR_MAPPING
+    std::memcpy(&pDwords[8], &linearToken, sizeof(linearToken));
+    // Token 2: BOX_MAPPING
+    std::memcpy(&pDwords[16], &boxToken, sizeof(boxToken));
+    pArgBuffer->Unmap(0, nullptr);
+
+    // Execute tile mappings on queue
+    pTileQueue->ExecuteTileMappings(24, pArgBuffer, 0, nullptr, 0, nullptr, 0, D3D12_EXECUTE_TILE_MAPPINGS_FLAG_NONE);
+
+    auto* pQueueImpl = static_cast<PrismD3D12TileMappingQueueImpl*>(pTileQueue);
+    PRISMX_ASSERT(pQueueImpl->m_executedBatchesCount == 1);
+    PRISMX_ASSERT(pQueueImpl->m_totalArgumentDwords == 24);
+    PRISMX_ASSERT(pQueueImpl->m_tokensProcessed == 3);
+
+    // 9. Fence timeline synchronization on tile mapping queue
+    ID3D12Fence* pFence = nullptr;
+    hr = dev.CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_ID3D12Fence, reinterpret_cast<void**>(&pFence));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pFence != nullptr);
+
+    hr = pTileQueue->Signal(pFence, 100ULL);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pFence->GetCompletedValue() == 100ULL);
+
+    hr = pTileQueue->Wait(pFence, 100ULL);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // 10. Unregister layouts
+    ID3D12Resource* unregisteredRes[1] = { reinterpret_cast<ID3D12Resource*>(0xDEAD0001) };
+    hr = pDev18->UnregisterResourceLayouts(0, 1, unregisteredRes);
+    PRISMX_ASSERT(FAILED(hr)); // unregistered resource fails atomic call
+
+    hr = pDev18->UnregisterResourceLayouts(0, 2, resources);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    ID3D12Heap* unregisteredHeap[1] = { reinterpret_cast<ID3D12Heap*>(0xDEAD0002) };
+    hr = pDev18->UnregisterHeapLayouts(0, 1, unregisteredHeap);
+    PRISMX_ASSERT(FAILED(hr)); // unregistered heap fails atomic call
+
+    hr = pDev18->UnregisterHeapLayouts(0, 2, heaps);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // 11. Cleanup
+    pFence->Release();
+    pArgBuffer->Release();
+    pHeapB->Release();
+    pHeapA->Release();
+    pResB->Release();
+    pResA->Release();
+    pTileQueue->Release();
+    pDev18->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -14600,9 +14841,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_Device76_CommandList70_And_Options88_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_Device17_And_Explicit_PSDB_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (122/122)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (123/123)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

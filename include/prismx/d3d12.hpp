@@ -117,8 +117,13 @@ enum D3D12_HEAP_FLAGS : uint32_t {
     D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES          = 0x40,
     D3D12_HEAP_FLAG_DENY_NON_RT_DS_TEXTURES      = 0x80,
     D3D12_HEAP_FLAG_HARDWARE_PROTECTED           = 0x100,
-    D3D12_HEAP_FLAG_ALLOW_WRITE_WATCH            = 0x200
+    D3D12_HEAP_FLAG_ALLOW_WRITE_WATCH            = 0x200,
+    D3D12_HEAP_FLAG_ALLOW_EXECUTE_TILE_MAPPINGS  = 0x8000
 };
+
+inline constexpr D3D12_HEAP_FLAGS operator|(D3D12_HEAP_FLAGS a, D3D12_HEAP_FLAGS b) {
+    return static_cast<D3D12_HEAP_FLAGS>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
 
 enum D3D12_FENCE_FLAGS : uint32_t {
     D3D12_FENCE_FLAG_NONE                   = 0,
@@ -156,8 +161,13 @@ enum D3D12_RESOURCE_FLAGS : uint32_t {
     D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS      = 0x4,
     D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE        = 0x8,
     D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER         = 0x10,
-    D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS   = 0x20
+    D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS   = 0x20,
+    D3D12_RESOURCE_FLAG_ALLOW_EXECUTE_TILE_MAPPINGS = 0x1000
 };
+
+inline constexpr D3D12_RESOURCE_FLAGS operator|(D3D12_RESOURCE_FLAGS a, D3D12_RESOURCE_FLAGS b) {
+    return static_cast<D3D12_RESOURCE_FLAGS>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
 
 // ============================================================================
 // 2. D3D12 Core Structures
@@ -208,6 +218,13 @@ struct D3D12_HEAP_PROPERTIES {
     uint32_t MemoryPoolPreference;
     uint32_t CreationNodeMask;
     uint32_t VisibleNodeMask;
+};
+
+struct D3D12_HEAP_DESC {
+    uint64_t SizeInBytes;
+    D3D12_HEAP_PROPERTIES Properties;
+    uint64_t Alignment;
+    D3D12_HEAP_FLAGS Flags;
 };
 
 struct D3D12_RESOURCE_DESC {
@@ -304,6 +321,10 @@ static constexpr IID IID_ID3D12CommandAllocator =
 static constexpr IID IID_ID3D12Fence = 
     { 0x0a753dcf, 0xc4d8, 0x4b91, { 0xad, 0xf6, 0xbe, 0x5a, 0x60, 0xd9, 0x5a, 0x76 } };
 
+static constexpr IID IID_ID3D12Heap = 
+    { 0x6b3b2502, 0x6e51, 0x45b3, { 0x90, 0xee, 0x98, 0x84, 0x26, 0x5e, 0x8d, 0xf3 } };
+static constexpr IID OFFICIAL_IID_ID3D12Heap = IID_ID3D12Heap;
+
 static constexpr IID IID_ID3D12PipelineState = 
     { 0x765a30f3, 0xf624, 0x4c6f, { 0xa8, 0x28, 0xac, 0xe9, 0x48, 0x62, 0x24, 0x45 } };
 
@@ -327,6 +348,7 @@ class ID3D12Object;
 class ID3D12DeviceChild;
 class ID3D12RootSignature;
 class ID3D12Resource;
+class ID3D12Heap;
 class ID3D12CommandAllocator;
 class ID3D12Fence;
 class ID3D12PipelineState;
@@ -361,6 +383,11 @@ public:
     virtual void Unmap(uint32_t Subresource, const void* pWrittenRange) = 0;
     virtual D3D12_RESOURCE_DESC GetDesc() = 0;
     virtual uint64_t GetGPUVirtualAddress() = 0;
+};
+
+class ID3D12Heap : public ID3D12DeviceChild {
+public:
+    virtual D3D12_HEAP_DESC GetDesc() = 0;
 };
 
 class ID3D12CommandAllocator : public ID3D12DeviceChild {
@@ -606,6 +633,52 @@ public:
     size_t GetSize() const { return m_memory.size(); }
     D3D12_RESOURCE_STATES GetCurrentState() const { return m_currentState; }
     void SetCurrentState(D3D12_RESOURCE_STATES s) { m_currentState = s; }
+};
+
+class Prism3D12HeapImpl : public ID3D12Heap {
+private:
+    std::atomic<uint32_t> m_refCount{ 1 };
+    ID3D12Device*         m_pDevice{ nullptr };
+    D3D12_HEAP_DESC       m_desc{};
+
+public:
+    Prism3D12HeapImpl(ID3D12Device* pDev, const D3D12_HEAP_DESC& desc)
+        : m_pDevice(pDev), m_desc(desc) {}
+
+    int32_t QueryInterface(const IID& riid, void** ppv) override {
+        if (!ppv) return -1;
+        if (riid == IID_IUnknown || riid == IID_ID3D12Object || riid == IID_ID3D12DeviceChild ||
+            riid == IID_ID3D12Heap || riid == OFFICIAL_IID_ID3D12Heap) {
+            *ppv = static_cast<ID3D12Heap*>(this);
+            AddRef();
+            return 0;
+        }
+        *ppv = nullptr;
+        return -2147467262;
+    }
+
+    uint32_t AddRef() override { return ++m_refCount; }
+    uint32_t Release() override {
+        uint32_t c = --m_refCount;
+        if (c == 0) delete this;
+        return c;
+    }
+
+    int32_t GetPrivateData(const IID&, uint32_t*, void*) override { return 0; }
+    int32_t SetPrivateData(const IID&, uint32_t, const void*) override { return 0; }
+    int32_t SetPrivateDataInterface(const IID&, const IUnknown*) override { return 0; }
+    int32_t SetName(const wchar_t*) override { return 0; }
+    int32_t GetDevice(const IID& riid, void** ppDevice) override {
+        (void)riid;
+        if (!ppDevice) return -1;
+        *ppDevice = m_pDevice;
+        if (m_pDevice) m_pDevice->AddRef();
+        return 0;
+    }
+
+    D3D12_HEAP_DESC GetDesc() override {
+        return m_desc;
+    }
 };
 
 class Prism3D12DescriptorHeapImpl : public ID3D12DescriptorHeap {
