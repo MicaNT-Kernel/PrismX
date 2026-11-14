@@ -15272,6 +15272,113 @@ int Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Ar
     return 0;
 }
 
+int Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_Architecture")
+
+    // 1. Pillar 1: D3D12 Options 28 & Cooperative Vector ABI
+    PRISMX_ASSERT(PRISMX_D3D12_COOPERATIVE_VECTOR_TIER_1_0 == 10u);
+    PRISMX_ASSERT(D3D12_COOPERATIVE_VECTOR_DATA_TYPE_FLOAT32 == 0u);
+    PRISMX_ASSERT(D3D12_COOPERATIVE_VECTOR_DATA_TYPE_FLOAT16 == 1u);
+    PRISMX_ASSERT(D3D12_COOPERATIVE_MATRIX_LAYOUT_ROW_MAJOR == 0u);
+
+    D3D12_FEATURE_DATA_COOPERATIVE_VECTORS_ABI optCoop{};
+    PRISMX_ASSERT(optCoop.CooperativeVectorTier == 10u);
+    PRISMX_ASSERT(optCoop.WaveMMA16x16x16Supported == 1);
+    PRISMX_ASSERT(optCoop.WaveMMA32x8x16Supported == 1);
+    PRISMX_ASSERT(optCoop.Float16AccumulatorSupported == 1);
+    PRISMX_ASSERT(optCoop.InShaderNeuralDenoisingSupported == 1);
+
+    // 2. Pillar 2: HLSL cooperative_vector<float, 64> Wave-Distributed Storage
+    CooperativeVector<float, 64> coopVec;
+    std::array<float, 64> testData{};
+    for (size_t i = 0; i < 64; ++i) {
+        testData[i] = static_cast<float>(i) - 32.0f; // Contains negatives for ReLU test
+    }
+    coopVec.Load(testData.data(), testData.size());
+
+    PRISMX_ASSERT(coopVec.GetElement(10) == -22.0f);
+    PRISMX_ASSERT(coopVec.GetElement(40) == 8.0f);
+
+    // Apply ReLU activation across all wave lanes
+    coopVec.ApplyRelu();
+    PRISMX_ASSERT(coopVec.GetElement(10) == 0.0f);
+    PRISMX_ASSERT(coopVec.GetElement(40) == 8.0f);
+
+    // 3. Pillar 3: Wave-Level Tensor Core WaveMMA Tile Execution
+    WaveMmaTile<16, 16, 16, float, float> mmaTile;
+    std::array<float, 256> matA{};
+    std::array<float, 256> matB{};
+    std::array<float, 256> matC{};
+
+    // Identity matrices
+    for (size_t i = 0; i < 16; ++i) {
+        matA[i * 16 + i] = 1.0f;
+        matB[i * 16 + i] = 2.0f;
+        matC[i * 16 + i] = 3.0f;
+    }
+
+    mmaTile.MultiplyAccumulate(matA, matB, matC);
+    // D = A * B + C -> (I * 2I) + 3I = 5I on diagonal, 0 elsewhere
+    for (size_t r = 0; r < 16; ++r) {
+        for (size_t c = 0; c < 16; ++c) {
+            float expected = (r == c) ? 5.0f : 0.0f;
+            PRISMX_ASSERT(std::abs(mmaTile.Accumulator[r * 16 + c] - expected) < 1e-5f);
+        }
+    }
+
+    // 4. Pillar 4: In-Shader Neural Denoiser (Ray Reconstruction)
+    auto denoiser = CreateInShaderNeuralDenoiser();
+    PRISMX_ASSERT(denoiser != nullptr);
+
+    constexpr size_t numSamples = 1024;
+    std::vector<float> groundTruth(numSamples * 3);
+    std::vector<float> noisyRadiance(numSamples * 3);
+    std::vector<float> normals(numSamples * 3);
+    std::vector<float> depths(numSamples);
+    std::vector<float> denoisedOutput(numSamples * 3, 0.0f);
+
+    for (size_t i = 0; i < numSamples; ++i) {
+        float t = static_cast<float>(i) / static_cast<float>(numSamples);
+        // Clean gradient
+        float cleanR = 0.2f + 0.6f * t;
+        float cleanG = 0.4f + 0.4f * std::sin(t * 3.14159f);
+        float cleanB = 0.8f - 0.5f * t;
+        groundTruth[i * 3 + 0] = cleanR;
+        groundTruth[i * 3 + 1] = cleanG;
+        groundTruth[i * 3 + 2] = cleanB;
+
+        // High-frequency Monte Carlo noise
+        float noise = ((static_cast<float>((i * 137) % 100)) / 100.0f - 0.5f) * 0.15f;
+        noisyRadiance[i * 3 + 0] = std::clamp(cleanR + noise, 0.0f, 1.0f);
+        noisyRadiance[i * 3 + 1] = std::clamp(cleanG + noise * 0.8f, 0.0f, 1.0f);
+        noisyRadiance[i * 3 + 2] = std::clamp(cleanB - noise * 0.5f, 0.0f, 1.0f);
+
+        normals[i * 3 + 0] = 0.0f;
+        normals[i * 3 + 1] = 0.0f;
+        normals[i * 3 + 2] = 1.0f;
+        depths[i] = 1.0f + t * 5.0f;
+    }
+
+    denoiser->DenoiseRayBuffer(noisyRadiance.data(),
+                               normals.data(),
+                               depths.data(),
+                               groundTruth.data(),
+                               denoisedOutput.data(),
+                               numSamples);
+
+    const auto& tel = denoiser->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalWavesExecuted == 32u);
+    PRISMX_ASSERT(tel.WaveMmaInvocations == 2048u); // 2 layers per sample * 1024
+    PRISMX_ASSERT(tel.TotalFlops > 0u);
+    PRISMX_ASSERT(tel.LdsSpillBytes == 0u);     // Verified pure wave-resident register execution
+    PRISMX_ASSERT(tel.BankConflicts == 0u);     // Zero LDS bank conflicts
+    PRISMX_ASSERT(tel.SpeedupOverScalarSimd > 8.0f);
+    PRISMX_ASSERT(tel.MeasuredPsnrDb > 30.0f);  // High-fidelity neural reconstruction
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15405,9 +15512,10 @@ int main() {
     if (Test_PrismX_Official_DirectSR_SuperResolution_Agility_Architecture() != 0) return 1;
     if (Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (127/127)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (128/128)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

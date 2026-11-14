@@ -60,3 +60,4 @@
 #include "prismx/directsr_runtime_agility.hpp"
 #include "prismx/work_graphs_11_mesh_nodes.hpp"
 #include "prismx/dxr_12_opacity_micromaps_ser.hpp"
+#include "prismx/cooperative_vectors_mma_neural_graphics.hpp"
