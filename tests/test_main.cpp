@@ -15208,6 +15208,70 @@ int Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Archit
     return 0;
 }
 
+int Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Architecture")
+
+    // 1. Pillar 1: DXR 1.2 ABI & Opacity Micromap Array Setup
+    PRISMX_ASSERT(PRISMX_D3D12_RAYTRACING_TIER_1_2 == 12u);
+
+    auto ommArray = CreateOpacityMicromapArray(0x0000000200000000ULL);
+    PRISMX_ASSERT(ommArray != nullptr);
+
+    // OMM 0: 2-STATE (64 micro-triangles, 8 bytes: 0b10101010...)
+    std::vector<uint8_t> omm2StateBits = { 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55 };
+    ommArray->AddMicromap(3, D3D12_OPACITY_MICROMAP_FORMAT_2_STATE, omm2StateBits);
+
+    // OMM 1: 4-STATE (16 micro-triangles, 4 bytes: fringe leaves with >85% known coverage)
+    std::vector<uint8_t> omm4StateBits = { 0x51, 0x24, 0x59, 0x11 };
+    ommArray->AddMicromap(2, D3D12_OPACITY_MICROMAP_FORMAT_4_STATE, omm4StateBits);
+
+    PRISMX_ASSERT(ommArray->GetCount() == 2u);
+    PRISMX_ASSERT(ommArray->GetGpuVirtualAddress() == 0x0000000200000000ULL);
+    PRISMX_ASSERT(ommArray->GetMicromap(0).SubdivisionLevel == 3u);
+    PRISMX_ASSERT(ommArray->GetMicromap(1).Format == D3D12_OPACITY_MICROMAP_FORMAT_4_STATE);
+
+    // Verify micro-triangle lookup (0 = Transparent, 1 = Opaque, 2 = Unknown)
+    uint32_t state0 = ommArray->EvaluateMicroTriangle(0, 0.05f, 0.05f);
+    PRISMX_ASSERT(state0 == 0 || state0 == 1);
+
+    // 2. Pillar 2: Shader Execution Reordering (SER) & HitObject API
+    std::vector<HitObject> waveLanes;
+    waveLanes.reserve(128);
+    // Create 128 divergent rays across 4 shader groups
+    for (uint32_t i = 0; i < 128; ++i) {
+        uint32_t divergentShader = (i * 7 + 3) % 4; // High divergence pattern
+        waveLanes.push_back(HitObject::MakeTriangleHit(0, 0, i, divergentShader, 10.0f + static_cast<float>(i), 0.3f, 0.3f));
+    }
+
+    ShaderExecutionReorderer::ReorderStats serStats{};
+    ShaderExecutionReorderer::ReorderWaveLanes(waveLanes, D3D12_SER_COHERENCE_HINT_SHADER_GROUP, &serStats);
+
+    PRISMX_ASSERT(serStats.TotalLanes == 128u);
+    PRISMX_ASSERT(serStats.DistinctShaderGroups == 4u);
+    PRISMX_ASSERT(serStats.PreReorderOccupancy < 50.0f);   // Divergent wave occupancy
+    PRISMX_ASSERT(serStats.PostReorderOccupancy >= 85.0f); // Reordered wave coherence (>85% occupancy)
+
+    // 3. Pillar 3: End-to-End DXR 1.2 Raytracing Pipeline with OMM & SER
+    auto pPipeline = CreateDxr12Pipeline(256, 256);
+    PRISMX_ASSERT(pPipeline != nullptr);
+
+    pPipeline->SetOpacityMicromapArray(ommArray);
+    pPipeline->TraceSceneWithOmmAndSer(1024);
+
+    const auto& tel = pPipeline->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalRaysTraced == 1024u);
+    PRISMX_ASSERT(tel.TriangleIntersections == 1024u);
+    PRISMX_ASSERT(tel.OmmOpaqueHits > 0u);
+    PRISMX_ASSERT(tel.OmmTransparentDiscards > 0u);
+    PRISMX_ASSERT(tel.AnyHitInvocationsBypassed > 800u); // Verified >80% AnyHit bypass
+    PRISMX_ASSERT(tel.AnyHitBypassPercentage > 80.0f);
+    PRISMX_ASSERT(tel.SerPostCoherenceOccupancy >= 85.0f);
+    PRISMX_ASSERT(tel.MeasuredPsnrDb > 20.0f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15340,9 +15404,10 @@ int main() {
     if (Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectSR_SuperResolution_Agility_Architecture() != 0) return 1;
     if (Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (126/126)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (127/127)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

@@ -59,3 +59,4 @@
 #include "prismx/enhanced_barriers_and_sample_positions.hpp"
 #include "prismx/directsr_runtime_agility.hpp"
 #include "prismx/work_graphs_11_mesh_nodes.hpp"
+#include "prismx/dxr_12_opacity_micromaps_ser.hpp"
