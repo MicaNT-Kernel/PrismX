@@ -15012,6 +15012,202 @@ int Test_PrismX_Official_DirectSR_SuperResolution_Agility_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Architecture")
+
+    // 1. Setup Node Definitions for Work Graphs 1.1 with Mesh Nodes
+    // Graph Topology:
+    //   Entrypoint: FrustumCullCompute (Broadcasting Compute Node)
+    //   -> Downstream: LODCoalesceCompute (Coalescing Compute Node, batches 4 records)
+    //   -> Downstream: MeshletRasterMesh (Mesh Node, generates triangles directly to rasterizer)
+
+    struct FrustumRecord {
+        float CamX, CamY, CamZ;
+        float FrustumPlanes[6];
+    };
+
+    struct ChunkRecord {
+        uint32_t ChunkId;
+        float CenterX, CenterY, CenterZ;
+        float Extent;
+    };
+
+    struct MeshletRecord {
+        uint32_t MeshletId;
+        uint32_t Lod;
+        float PosX, PosY, PosZ;
+    };
+
+    std::vector<PrismXWorkGraphNodeDef> nodes;
+
+    // Node 0: FrustumCullCompute
+    PrismXWorkGraphNodeDef node0{};
+    node0.Name = L"FrustumCullCompute";
+    node0.ArrayIndex = 0;
+    node0.NodeType = D3D12_NODE_TYPE_COMPUTE;
+    node0.LaunchMode = D3D12_NODE_LAUNCH_MODE_BROADCASTING;
+    node0.ComputeShader = []([[maybe_unused]] const void* pRecord, [[maybe_unused]] size_t size, NodeOutputContext& ctx) {
+        // Frustum culling produces 4 chunk records
+        for (uint32_t c = 0; c < 4; ++c) {
+            ChunkRecord chunk{ c, static_cast<float>(c) * 2.0f - 3.0f, 0.0f, 5.0f, 1.0f };
+            ctx.EmitRecord(L"LODCoalesceCompute", &chunk, sizeof(chunk));
+        }
+    };
+    nodes.push_back(node0);
+
+    // Node 1: LODCoalesceCompute
+    PrismXWorkGraphNodeDef node1{};
+    node1.Name = L"LODCoalesceCompute";
+    node1.ArrayIndex = 0;
+    node1.NodeType = D3D12_NODE_TYPE_COMPUTE;
+    node1.LaunchMode = D3D12_NODE_LAUNCH_MODE_COALESCING;
+    node1.MaxRecordsPerGroup = 4;
+    node1.ComputeShader = [](const void* pRecord, size_t size, NodeOutputContext& ctx) {
+        if (size >= sizeof(ChunkRecord)) {
+            const auto* chunk = reinterpret_cast<const ChunkRecord*>(pRecord);
+            // Emits 1 meshlet record per visible chunk
+            MeshletRecord meshlet{ chunk->ChunkId, 0, chunk->CenterX, chunk->CenterY, chunk->CenterZ };
+            ctx.EmitRecord(L"MeshletRasterMesh", &meshlet, sizeof(meshlet));
+        }
+    };
+    nodes.push_back(node1);
+
+    // Node 2: MeshletRasterMesh (Mesh Node in Work Graph 1.1)
+    PrismXWorkGraphNodeDef node2{};
+    node2.Name = L"MeshletRasterMesh";
+    node2.ArrayIndex = 0;
+    node2.NodeType = D3D12_NODE_TYPE_MESH;
+    node2.LaunchMode = D3D12_NODE_LAUNCH_MODE_MESH;
+    node2.MaxMeshVertices = 64;
+    node2.MaxMeshPrimitives = 126;
+    node2.MeshShader = [](const void* pRecord, size_t size, MeshOutputContext& ctx) {
+        if (size >= sizeof(MeshletRecord)) {
+            const auto* m = reinterpret_cast<const MeshletRecord*>(pRecord);
+            ctx.SetMeshCounts(3, 1);
+
+            float cx = m->PosX * 0.2f;
+            float cy = m->PosY * 0.2f;
+
+            // Generate a 3D triangle in normalized coordinates
+            D3D12_MESH_NODE_VERTEX v0{};
+            v0.x = cx - 0.3f; v0.y = cy - 0.3f; v0.z = 0.5f; v0.w = 1.0f;
+            v0.r = 1.0f; v0.g = 0.2f; v0.b = 0.2f; v0.a = 1.0f;
+
+            D3D12_MESH_NODE_VERTEX v1{};
+            v1.x = cx + 0.3f; v1.y = cy - 0.3f; v1.z = 0.5f; v1.w = 1.0f;
+            v1.r = 0.2f; v1.g = 1.0f; v1.b = 0.2f; v1.a = 1.0f;
+
+            D3D12_MESH_NODE_VERTEX v2{};
+            v2.x = cx; v2.y = cy + 0.4f; v2.z = 0.5f; v2.w = 1.0f;
+            v2.r = 0.2f; v2.g = 0.2f; v2.b = 1.0f; v2.a = 1.0f;
+
+            ctx.EmitVertex(v0);
+            ctx.EmitVertex(v1);
+            ctx.EmitVertex(v2);
+
+            ctx.EmitPrimitive(0, 1, 2);
+        }
+    };
+    nodes.push_back(node2);
+
+    // 2. Build Work Graph State Object Description
+    D3D12_NODE_ID entrypoint{ L"FrustumCullCompute", 0 };
+    D3D12_WORK_GRAPH_DESC graphDesc{};
+    graphDesc.ProgramName = L"WorkGraph11_AutonomousMesh";
+    graphDesc.Flags = D3D12_WORK_GRAPH_FLAG_ENABLE_MESH_NODES;
+    graphDesc.NumEntrypoints = 1;
+    graphDesc.pEntrypoints = &entrypoint;
+
+    D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS1 memReqs{};
+    memReqs.MinSizeInBytes = 65536;
+    memReqs.MaxSizeInBytes = 1048576;
+    memReqs.SizeGranularityInBytes = 65536;
+    memReqs.MaxSizePerRecordInBytes = 256;
+    memReqs.MaxNodeRecursionDepth = 16;
+
+    ComPtr<ID3D12StateObject> pStateObj = CreateWorkGraph11StateObject(&graphDesc, nodes, memReqs);
+    PRISMX_ASSERT(pStateObj.Get() != nullptr);
+
+    // 3. Query ID3D12WorkGraphProperties & ID3D12WorkGraphProperties1
+    ComPtr<ID3D12WorkGraphProperties> pWGProps;
+    HRESULT hr = pStateObj->QueryInterface(IID_ID3D12WorkGraphProperties, pWGProps.PutVoid());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pWGProps->GetNumWorkGraphs() == 1u);
+    PRISMX_ASSERT(wcscmp(pWGProps->GetProgramName(0), L"WorkGraph11_AutonomousMesh") == 0);
+    PRISMX_ASSERT(pWGProps->GetWorkGraphIndex(L"WorkGraph11_AutonomousMesh") == 0u);
+    PRISMX_ASSERT(pWGProps->GetNumNodes(0) == 3u);
+    PRISMX_ASSERT(pWGProps->GetNumEntrypoints(0) == 1u);
+
+    D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS baseMemReqs{};
+    pWGProps->GetWorkGraphMemoryRequirements(0, &baseMemReqs);
+    PRISMX_ASSERT(baseMemReqs.MinSizeInBytes == 65536);
+
+    ComPtr<ID3D12WorkGraphProperties1> pWGProps1;
+    hr = pStateObj->QueryInterface(IID_ID3D12WorkGraphProperties1, pWGProps1.PutVoid());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pWGProps1->GetNodeType(0, 0) == D3D12_NODE_TYPE_COMPUTE);
+    PRISMX_ASSERT(pWGProps1->GetNodeType(0, 2) == D3D12_NODE_TYPE_MESH);
+    PRISMX_ASSERT(pWGProps1->GetNodeLaunchMode(0, 0) == D3D12_NODE_LAUNCH_MODE_BROADCASTING);
+    PRISMX_ASSERT(pWGProps1->GetNodeLaunchMode(0, 1) == D3D12_NODE_LAUNCH_MODE_COALESCING);
+    PRISMX_ASSERT(pWGProps1->GetNodeLaunchMode(0, 2) == D3D12_NODE_LAUNCH_MODE_MESH);
+    PRISMX_ASSERT(pWGProps1->GetMeshNodeMaxVertices(0, 2) == 64u);
+    PRISMX_ASSERT(pWGProps1->GetMeshNodeMaxPrimitives(0, 2) == 126u);
+
+    // 4. Initialize Work Graphs 1.1 Sovereign Execution Engine
+    auto pEngine = CreateWorkGraph11Engine(pStateObj.Get(), 256, 256);
+    PRISMX_ASSERT(pEngine != nullptr);
+
+    // Assign Backing Memory (256 KB VRAM pool)
+    pEngine->SetBackingMemory(0x0000000100000000ULL, 262144);
+    pEngine->ClearBuffers(0xFF0A0A14u, 1.0f);
+
+    // 5. Dispatch Graph (Autonomous GPU Execution Pipeline)
+    FrustumRecord frustumInput{ 0.0f, 0.0f, 0.0f, { 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f } };
+    D3D12_NODE_CPU_INPUT nodeInput{};
+    nodeInput.EntrypointIndex = 0;
+    nodeInput.NumRecords = 1;
+    nodeInput.pRecords = &frustumInput;
+    nodeInput.RecordStrideInBytes = sizeof(FrustumRecord);
+
+    D3D12_DISPATCH_GRAPH_DESC dispatchDesc{};
+    dispatchDesc.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
+    dispatchDesc.NodeCPUInput = nodeInput;
+
+    bool dispatchOk = pEngine->DispatchGraph(&dispatchDesc);
+    PRISMX_ASSERT(dispatchOk);
+
+    // 6. Verify Autonomous GPU Execution Telemetry
+    const auto& telemetry = pEngine->GetTelemetry();
+    PRISMX_ASSERT(telemetry.TotalRecordsDispatched == 1u);
+    PRISMX_ASSERT(telemetry.TotalRecordsGenerated == 8u); // 4 chunk records + 4 meshlet records
+    PRISMX_ASSERT(telemetry.ComputeInvocations >= 5u); // 1 frustum + 4 coalesced chunk nodes
+    PRISMX_ASSERT(telemetry.MeshNodeInvocations == 4u);
+    PRISMX_ASSERT(telemetry.MeshletsGenerated == 4u);
+    PRISMX_ASSERT(telemetry.VerticesEmitted == 12u);  // 4 meshlets * 3 vertices
+    PRISMX_ASSERT(telemetry.PrimitivesEmitted == 4u); // 4 meshlets * 1 triangle
+    PRISMX_ASSERT(telemetry.PixelsRasterized > 500u); // Verified rasterized coverage
+    PRISMX_ASSERT(telemetry.ZeroCpuStallVerified == true);
+    PRISMX_ASSERT(telemetry.MeasuredPsnrDb > 20.0f);
+
+    // 7. Verify Options21 / Options27 ABI Alignment
+    using namespace D3D12ComAbi;
+    PrismD3D12Device14CanonicalImpl dev;
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS21_ABI opt21{};
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS21, &opt21, sizeof(opt21));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opt21.WorkGraphsTier == 11u); // Tier 1.1
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS27_ABI opt27{};
+    hr = dev.CheckFeatureSupport(D3D12_FEATURE_ABI_D3D12_OPTIONS27, &opt27, sizeof(opt27));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(opt27.WorkGraphsTier == 11u);
+    PRISMX_ASSERT(opt27.AmplifiedMeshDispatchSupported == 1);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15143,9 +15339,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectSR_SuperResolution_Agility_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (125/125)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (126/126)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

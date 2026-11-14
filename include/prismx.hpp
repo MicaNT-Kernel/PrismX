@@ -58,3 +58,4 @@
 #include "prismx/pipeline_library_and_cache.hpp"
 #include "prismx/enhanced_barriers_and_sample_positions.hpp"
 #include "prismx/directsr_runtime_agility.hpp"
+#include "prismx/work_graphs_11_mesh_nodes.hpp"
