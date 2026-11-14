@@ -28,6 +28,7 @@ enum DXGI_FORMAT : uint32_t {
     DXGI_FORMAT_R32G32B32_FLOAT             = 6,
     DXGI_FORMAT_R16G16B16A16_FLOAT          = 10,
     DXGI_FORMAT_R16G16B16A16_UNORM          = 11,
+    DXGI_FORMAT_R16G16_FLOAT                = 34,
     DXGI_FORMAT_R32G32_FLOAT                = 16,
     DXGI_FORMAT_R8G8B8A8_TYPELESS           = 27,
     DXGI_FORMAT_R8G8B8A8_UNORM              = 28,

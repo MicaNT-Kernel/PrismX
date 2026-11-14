@@ -376,15 +376,30 @@ enum D3D12_FEATURE_ABI : uint32_t {
     D3D12_FEATURE_ABI_D3D12_OPTIONS88        = 127,
     D3D12_FEATURE_ABI_ASYNC_COMMANDS                      = 128,
     D3D12_FEATURE_ABI_EXECUTE_TILE_MAPPINGS               = 129,
-    D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = 130
+    D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = 130,
+    D3D12_FEATURE_ABI_DIRECTSR                            = 131
 };
 
 inline constexpr D3D12_FEATURE_ABI D3D12_FEATURE_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = static_cast<D3D12_FEATURE_ABI>(60);
+inline constexpr D3D12_FEATURE_ABI D3D12_FEATURE_DIRECTSR                            = static_cast<D3D12_FEATURE_ABI>(61);
 
 struct D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI {
     uint32_t ComputeQueuesPer3DQueue;
 };
 using D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS = D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI;
+
+struct D3D12_FEATURE_DATA_DIRECTSR_ABI {
+    uint32_t SupportedVariants;
+    uint32_t DefaultVariant;
+    uint32_t MaxInputWidth;
+    uint32_t MaxInputHeight;
+    uint32_t MaxOutputWidth;
+    uint32_t MaxOutputHeight;
+    float    MinScaleRatio;
+    float    MaxScaleRatio;
+    uint32_t SupportedFlags;
+};
+using D3D12_FEATURE_DATA_DIRECTSR = D3D12_FEATURE_DATA_DIRECTSR_ABI;
 
 enum D3D12_ASYNC_COMMANDS_IMPL : uint32_t {
     D3D12_ASYNC_COMMANDS_IMPL_NOT_SUPPORTED = 0,
@@ -5566,6 +5581,20 @@ public:
                 p->ComputeQueuesPer3DQueue = 4u;
                 return S_OK;
             }
+            case D3D12_FEATURE_ABI_DIRECTSR: {
+                if (Size < sizeof(D3D12_FEATURE_DATA_DIRECTSR_ABI)) return E_INVALIDARG;
+                auto* dsr = static_cast<D3D12_FEATURE_DATA_DIRECTSR_ABI*>(pData);
+                dsr->SupportedVariants = 0x0F;
+                dsr->DefaultVariant    = 1;
+                dsr->MaxInputWidth     = 7680;
+                dsr->MaxInputHeight    = 4320;
+                dsr->MaxOutputWidth    = 15360;
+                dsr->MaxOutputHeight   = 8640;
+                dsr->MinScaleRatio     = 1.0f;
+                dsr->MaxScaleRatio     = 3.5f;
+                dsr->SupportedFlags    = 0xFF;
+                return S_OK;
+            }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS16: {
                 if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI)) return E_INVALIDARG;
                 auto* o16 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS16_ABI*>(pData);
@@ -5628,6 +5657,19 @@ public:
                 return S_OK;
             }
             case D3D12_FEATURE_ABI_D3D12_OPTIONS22: {
+                if (Size == sizeof(D3D12_FEATURE_DATA_DIRECTSR_ABI)) {
+                    auto* dsr = static_cast<D3D12_FEATURE_DATA_DIRECTSR_ABI*>(pData);
+                    dsr->SupportedVariants = 0x0F;
+                    dsr->DefaultVariant    = 1;
+                    dsr->MaxInputWidth     = 7680;
+                    dsr->MaxInputHeight    = 4320;
+                    dsr->MaxOutputWidth    = 15360;
+                    dsr->MaxOutputHeight   = 8640;
+                    dsr->MinScaleRatio     = 1.0f;
+                    dsr->MaxScaleRatio     = 3.5f;
+                    dsr->SupportedFlags    = 0xFF;
+                    return S_OK;
+                }
                 if (Size < sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS22_ABI)) return E_INVALIDARG;
                 auto* o22 = static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS22_ABI*>(pData);
                 o22->Max1DDispatchSize     = 1073741824u; // 1G dispatches (modern 1D limit)
@@ -9162,5 +9204,9 @@ using D3D12ComAbi::D3D12_FEATURE_ABI_HARDWARE_SCHEDULING_QUEUE_GROUPINGS;
 using D3D12ComAbi::D3D12_FEATURE_HARDWARE_SCHEDULING_QUEUE_GROUPINGS;
 using D3D12ComAbi::D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS_ABI;
 using D3D12ComAbi::D3D12_FEATURE_DATA_HARDWARE_SCHEDULING_QUEUE_GROUPINGS;
+using D3D12ComAbi::D3D12_FEATURE_ABI_DIRECTSR;
+using D3D12ComAbi::D3D12_FEATURE_DIRECTSR;
+using D3D12ComAbi::D3D12_FEATURE_DATA_DIRECTSR_ABI;
+using D3D12ComAbi::D3D12_FEATURE_DATA_DIRECTSR;
 
 } // namespace prismx

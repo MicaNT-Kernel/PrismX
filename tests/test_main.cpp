@@ -14846,6 +14846,172 @@ int Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202
     return 0;
 }
 
+int Test_PrismX_Official_DirectSR_SuperResolution_Agility_Architecture() {
+    PRISMX_TEST("PrismX Official DirectSR (Super Resolution) & Agility SDK Runtime Architecture")
+
+    using namespace prismx::DirectSR;
+
+    // 1. Validate D3D12_FEATURE_DIRECTSR on ID3D12Device
+    prismx::D3D12ComAbi::PrismD3D12Device14CanonicalImpl dev;
+    prismx::D3D12_FEATURE_DATA_DIRECTSR dsrFeature{};
+    HRESULT hr = dev.CheckFeatureSupport(D3D12_FEATURE_DIRECTSR, &dsrFeature, sizeof(dsrFeature));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT((dsrFeature.SupportedVariants & D3D12_DIRECTSR_VARIANT_FLAG_INTEGRATED) != 0);
+    PRISMX_ASSERT((dsrFeature.SupportedVariants & D3D12_DIRECTSR_VARIANT_FLAG_NVIDIA_DLSS) != 0);
+    PRISMX_ASSERT((dsrFeature.SupportedVariants & D3D12_DIRECTSR_VARIANT_FLAG_AMD_FSR) != 0);
+    PRISMX_ASSERT((dsrFeature.SupportedVariants & D3D12_DIRECTSR_VARIANT_FLAG_INTEL_XESS) != 0);
+    PRISMX_ASSERT(dsrFeature.DefaultVariant == D3D12_DIRECTSR_VARIANT_INTEGRATED);
+    PRISMX_ASSERT(dsrFeature.MaxInputWidth == 7680u);
+    PRISMX_ASSERT(dsrFeature.MaxOutputWidth == 15360u);
+    PRISMX_ASSERT(dsrFeature.MaxScaleRatio >= 3.5f);
+
+    // 2. Validate DirectSR COM Context Creation & Lifecycle
+    ID3D12DirectSRContext* pCtx = nullptr;
+    hr = CreateDirectSRContext(nullptr, IID_ID3D12DirectSRContext, reinterpret_cast<void**>(&pCtx));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pCtx != nullptr);
+
+    // Test QueryInterface for IUnknown
+    IUnknown* pUnk = nullptr;
+    hr = pCtx->QueryInterface(IID_IUnknown, reinterpret_cast<void**>(&pUnk));
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(pUnk != nullptr);
+    pUnk->Release();
+
+    // 3. Test Variant Descriptors across all 4 ecosystems
+    D3D12_DIRECTSR_VARIANT_DESC desc{};
+    hr = pCtx->GetVariantDesc(D3D12_DIRECTSR_VARIANT_INTEGRATED, &desc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(std::string(desc.VariantName).find("PrismX") != std::string::npos);
+    PRISMX_ASSERT(desc.SupportsSharpening && desc.SupportsReactiveMask);
+
+    hr = pCtx->GetVariantDesc(D3D12_DIRECTSR_VARIANT_NVIDIA_DLSS, &desc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(std::string(desc.VariantName).find("DLSS") != std::string::npos);
+
+    hr = pCtx->GetVariantDesc(D3D12_DIRECTSR_VARIANT_AMD_FSR, &desc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(std::string(desc.VariantName).find("FSR") != std::string::npos);
+
+    hr = pCtx->GetVariantDesc(D3D12_DIRECTSR_VARIANT_INTEL_XESS, &desc);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(std::string(desc.VariantName).find("XeSS") != std::string::npos);
+
+    // 4. Test Resolution Quality Scaler (4K Target: 3840 x 2160)
+    uint32_t inW = 0, inH = 0;
+    // Performance: 2.0x -> 1080p (1920 x 1080)
+    hr = pCtx->GetRecommendedInputResolution(3840, 2160, D3D12_DIRECTSR_QUALITY_PERFORMANCE, &inW, &inH);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(inW == 1920u && inH == 1080u);
+
+    // Quality: 1.5x -> 1440p (2560 x 1440)
+    hr = pCtx->GetRecommendedInputResolution(3840, 2160, D3D12_DIRECTSR_QUALITY_QUALITY, &inW, &inH);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(inW == 2560u && inH == 1440u);
+
+    // Ultra Performance: 3.0x -> 720p (1280 x 720)
+    hr = pCtx->GetRecommendedInputResolution(3840, 2160, D3D12_DIRECTSR_QUALITY_ULTRA_PERFORMANCE, &inW, &inH);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(inW == 1280u && inH == 720u);
+
+    // 5. Test Halton Subpixel Jitter Computation
+    float jitterX = 0.0f, jitterY = 0.0f;
+    for (uint32_t frame = 0; frame < 16; ++frame) {
+        ComputeSubpixelJitter(frame, 16, jitterX, jitterY);
+        PRISMX_ASSERT(jitterX >= -0.5f && jitterX <= 0.5f);
+        PRISMX_ASSERT(jitterY >= -0.5f && jitterY <= 0.5f);
+    }
+
+    // 6. Test DirectSR Initialization (Render 1920x1080 -> Output 3840x2160)
+    D3D12_DIRECTSR_INITIALIZATION_PARAMETERS initParams{};
+    initParams.Variant = D3D12_DIRECTSR_VARIANT_INTEGRATED;
+    initParams.QualityMode = D3D12_DIRECTSR_QUALITY_PERFORMANCE;
+    initParams.InputWidth = 1920;
+    initParams.InputHeight = 1080;
+    initParams.OutputWidth = 3840;
+    initParams.OutputHeight = 2160;
+    initParams.ColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+    initParams.DepthFormat = DXGI_FORMAT_D32_FLOAT;
+    initParams.MotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
+    initParams.Flags = D3D12_DIRECTSR_FLAG_ALLOW_HDR | D3D12_DIRECTSR_FLAG_ENABLE_SHARPENING;
+
+    hr = pCtx->Initialize(&initParams);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    pCtx->SetSharpness(0.85f);
+
+    // 7. Synthetic Frame Generation & Upscale Dispatch
+    std::vector<uint32_t> srcPixels(1920 * 1080, 0xFF121928u); // Carbon slate background
+    // Draw Barrer Cyan (#00D4FF) pattern in center
+    for (uint32_t y = 400; y < 680; ++y) {
+        for (uint32_t x = 760; x < 1160; ++x) {
+            srcPixels[y * 1920 + x] = 0xFFFFD400u; // BGRA / RGBA packed cyan
+        }
+    }
+
+    std::vector<uint32_t> dstPixels(3840 * 2160, 0);
+    std::vector<float> motionVectors(1920 * 1080 * 2, 0.0f);
+    std::vector<float> depthBuffer(1920 * 1080, 0.5f);
+
+    D3D12_DIRECTSR_DISPATCH_PARAMETERS dispatchParams{};
+    dispatchParams.InputColor.pData = srcPixels.data();
+    dispatchParams.InputColor.Width = 1920;
+    dispatchParams.InputColor.Height = 1080;
+    dispatchParams.InputColor.RowPitch = 1920 * 4;
+    dispatchParams.InputColor.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    dispatchParams.OutputColor.pData = dstPixels.data();
+    dispatchParams.OutputColor.Width = 3840;
+    dispatchParams.OutputColor.Height = 2160;
+    dispatchParams.OutputColor.RowPitch = 3840 * 4;
+    dispatchParams.OutputColor.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    dispatchParams.Depth.pData = depthBuffer.data();
+    dispatchParams.Depth.Width = 1920;
+    dispatchParams.Depth.Height = 1080;
+
+    dispatchParams.MotionVectors.pData = motionVectors.data();
+    dispatchParams.MotionVectors.Width = 1920;
+    dispatchParams.MotionVectors.Height = 1080;
+
+    dispatchParams.JitterOffsetX = -0.125f;
+    dispatchParams.JitterOffsetY = 0.25f;
+    dispatchParams.MotionVectorScaleX = 1.0f;
+    dispatchParams.MotionVectorScaleY = 1.0f;
+    dispatchParams.CameraNear = 0.1f;
+    dispatchParams.CameraFar = 1000.0f;
+    dispatchParams.Sharpness = 0.85f;
+    dispatchParams.ResetHistory = true;
+
+    // Dispatch Frame 1 (cold history)
+    hr = pCtx->DispatchDirectSR(&dispatchParams);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    // Verify non-zero output
+    PRISMX_ASSERT(dstPixels[0] != 0); // Slate background reconstructed
+    // Verify center pixel has Cyan
+    uint32_t centerPixel = dstPixels[1080 * 3840 + 1920];
+    PRISMX_ASSERT(centerPixel != 0);
+
+    // Dispatch Frame 2 (temporal history accumulation with subpixel jitter)
+    dispatchParams.JitterOffsetX = 0.125f;
+    dispatchParams.JitterOffsetY = -0.25f;
+    dispatchParams.ResetHistory = false;
+    hr = pCtx->DispatchDirectSR(&dispatchParams);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+
+    D3D12_DIRECTSR_STATS stats{};
+    hr = pCtx->GetStats(&stats);
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(stats.TotalFramesDispatched == 2u);
+    PRISMX_ASSERT(stats.PeakSignalToNoiseRatioDb > 35.0f);
+
+    pCtx->Release();
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -14976,9 +15142,10 @@ int main() {
     if (Test_PrismX_Official_D3D12_AsyncCommands_And_Fallback_Architecture() != 0) return 1;
     if (Test_PrismX_Official_D3D12_ExecuteTileMappings_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DXC_SM69_SM610_DXIL19_Container_And_DirectXHeaders16202_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectSR_SuperResolution_Agility_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (124/124)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (125/125)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
