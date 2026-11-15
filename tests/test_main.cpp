@@ -15485,6 +15485,57 @@ int Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Archit
     return 0;
 }
 
+int Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture")
+
+    // 1. Pillar 1: DirectLatency ABI & Feature Flags
+    PRISMX_ASSERT(PRISMX_D3D12_LOW_LATENCY_TIER_1_0 == 10u);
+    PRISMX_ASSERT(D3D12_FEATURE_ABI_D3D12_LOW_LATENCY == 130u);
+    PRISMX_ASSERT(D3D12_LATENCY_MARKER_SIMULATION_START == 0u);
+    PRISMX_ASSERT(D3D12_LATENCY_MARKER_INPUT_SAMPLE == 6u);
+
+    D3D12_FEATURE_DATA_LOW_LATENCY_ABI feat{};
+    PRISMX_ASSERT(feat.Tier == 10u);
+    PRISMX_ASSERT(feat.LowLatencySupported == 1);
+    PRISMX_ASSERT(feat.SleepSupported == 1);
+    PRISMX_ASSERT(feat.GpuBoostSupported == 1);
+    PRISMX_ASSERT(feat.MaxQueuedFramesAllowed == 1u);
+
+    // 2. Pillar 2: Low Latency Engine Creation & Phase Cadence Simulation
+    auto engine = CreateDirectLatencyEngine();
+    PRISMX_ASSERT(engine != nullptr);
+
+    // Phase A: Unconstrained Run (Low Latency OFF)
+    engine->SimulateFrameCadence(30, D3D12_LOW_LATENCY_MODE_OFF);
+    const auto& telOff = engine->GetTelemetry();
+    PRISMX_ASSERT(telOff.MaxObservedQueueDepth > 1u);
+    PRISMX_ASSERT(telOff.AverageLatencyOffMs > 30.0f); // ~45ms unconstrained latency
+
+    // Phase B: Dynamic Sleep Pacing (Low Latency ON)
+    engine->SimulateFrameCadence(30, D3D12_LOW_LATENCY_MODE_ON);
+    const auto& telOn = engine->GetTelemetry();
+    PRISMX_ASSERT(telOn.MaxObservedQueueDepth == 1u); // Queue depth bounded to 1
+    PRISMX_ASSERT(telOn.AverageLatencyOnMs < 20.0f);
+
+    // Phase C: Dynamic Sleep Pacing + GPU Boost (Low Latency BOOST)
+    engine->SimulateFrameCadence(30, D3D12_LOW_LATENCY_MODE_BOOST);
+    const auto& telBoost = engine->GetTelemetry();
+    PRISMX_ASSERT(telBoost.AverageLatencyBoostMs < 15.0f); // Slashed to <15ms
+    PRISMX_ASSERT(telBoost.LatencyReductionPercent > 65.0f); // >65% reduction
+    PRISMX_ASSERT(telBoost.PacingStable == true);
+    PRISMX_ASSERT(telBoost.PacingJitterMs < 0.15f);
+
+    // Pillar 3: Results ABI Verification
+    D3D12_LATENCY_RESULTS_ABI results{};
+    PRISMX_ASSERT(engine->GetLatencyResults(&results) == true);
+    PRISMX_ASSERT(results.EffectiveQueueDepth <= 1u);
+    PRISMX_ASSERT(results.GpuClockBoostEngaged == true);
+    PRISMX_ASSERT(results.TotalInputToDisplayLatencyMs < 15.0f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15620,9 +15671,10 @@ int main() {
     if (Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Architecture() != 0) return 1;
     if (Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (129/129)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (130/130)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
