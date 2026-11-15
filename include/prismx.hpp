@@ -63,3 +63,4 @@
 #include "prismx/cooperative_vectors_mma_neural_graphics.hpp"
 #include "prismx/directfg_frame_generation_optical_flow.hpp"
 #include "prismx/directlatency_reflex_antilag_pacing.hpp"
+#include "prismx/dxr_13_curve_raytracing_swept_spheres.hpp"

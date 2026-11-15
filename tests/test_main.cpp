@@ -15536,6 +15536,73 @@ int Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architecture")
+
+    // 1. Pillar 1: DXR 1.3 ABI & Feature Flags
+    PRISMX_ASSERT(PRISMX_D3D12_RAYTRACING_TIER_1_3 == 13u);
+    PRISMX_ASSERT(D3D12_FEATURE_ABI_D3D12_RAYTRACING_1_3 == 131u);
+    PRISMX_ASSERT(D3D12_RAYTRACING_CURVE_TYPE_LINEAR_SWEPT_SPHERE == 0u);
+    PRISMX_ASSERT(D3D12_RAYTRACING_CURVE_TYPE_CATMULL_ROM_SPLINE == 1u);
+
+    D3D12_FEATURE_DATA_RAYTRACING_1_3_ABI feat{};
+    PRISMX_ASSERT(feat.Tier == 13u);
+    PRISMX_ASSERT(feat.NativeCurvesSupported == 1);
+    PRISMX_ASSERT(feat.LinearSweptSpheresSupported == 1);
+    PRISMX_ASSERT(feat.AnalyticNormalsSupported == 1);
+    PRISMX_ASSERT(feat.MaxCurveSegmentsPerGeometry >= 1048576u);
+
+    // 2. Pillar 2: Synthetic Hair / Strand Strand Mesh
+    auto pipeline = CreateDxr13CurvePipeline();
+    PRISMX_ASSERT(pipeline != nullptr);
+
+    // Add a strand of hair curving downwards from crown: (0, 2, 0) -> (0.2, 1.0, 0.1) -> (0.5, 0.0, 0.2)
+    CurveVertex4F v0{ 0.0f, 2.0f, 0.0f, 0.05f }; // Thick root
+    CurveVertex4F v1{ 0.2f, 1.0f, 0.1f, 0.03f }; // Mid strand
+    CurveVertex4F v2{ 0.5f, 0.0f, 0.2f, 0.01f }; // Fine tip
+    pipeline->AddCurveSegment(v0, v1);
+    pipeline->AddCurveSegment(v1, v2);
+
+    // 3. Pillar 3: Ray Tracing against Linear Swept Sphere Curves
+    std::vector<std::pair<Vec3, Vec3>> rays;
+    // Ray 0: aimed directly at v0 -> v1 segment mid-point (0.1, 1.5, 0.05)
+    rays.push_back({ Vec3{ 0.1f, 1.5f, -2.0f }, Vec3{ 0.0f, 0.0f, 1.0f } });
+    // Ray 1: aimed directly at v1 -> v2 segment mid-point (0.35, 0.5, 0.15)
+    rays.push_back({ Vec3{ 0.35f, 0.5f, -2.0f }, Vec3{ 0.0f, 0.0f, 1.0f } });
+    // Ray 2: misses to the side (5.0, 1.0, -2.0)
+    rays.push_back({ Vec3{ 5.0f, 1.0f, -2.0f }, Vec3{ 0.0f, 0.0f, 1.0f } });
+
+    std::vector<CurveHitResult> hits;
+    pipeline->TraceRays(rays, hits);
+
+    PRISMX_ASSERT(hits.size() == 3u);
+    // Ray 0 should hit segment 0
+    PRISMX_ASSERT(hits[0].Hit == true);
+    PRISMX_ASSERT(hits[0].PrimitiveIndex == 0u);
+    PRISMX_ASSERT(hits[0].DistanceT > 1.8f && hits[0].DistanceT < 2.2f);
+    PRISMX_ASSERT(hits[0].Normal.LengthSquared() > 0.9f);
+
+    // Ray 1 should hit segment 1
+    PRISMX_ASSERT(hits[1].Hit == true);
+    PRISMX_ASSERT(hits[1].PrimitiveIndex == 1u);
+    PRISMX_ASSERT(hits[1].DistanceT > 1.8f && hits[1].DistanceT < 2.2f);
+
+    // Ray 2 should miss
+    PRISMX_ASSERT(hits[2].Hit == false);
+
+    // 4. Pillar 4: Telemetry, Memory Reduction & Speedup Verification
+    const auto& tel = pipeline->GetTelemetry();
+    PRISMX_ASSERT(tel.RaysTraced == 3u);
+    PRISMX_ASSERT(tel.PrimaryHits == 2u);
+    PRISMX_ASSERT(tel.BvhMemoryReductionRatio > 5.0f);
+    PRISMX_ASSERT(tel.TraversalSpeedupVsTriangles > 4.0f);
+    PRISMX_ASSERT(tel.AverageShadingLuminance > 0.0f);
+    PRISMX_ASSERT(tel.AverageStrandRadii > 0.01f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15672,9 +15739,10 @@ int main() {
     if (Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (130/130)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (131/131)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
