@@ -15379,6 +15379,112 @@ int Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_A
     return 0;
 }
 
+int Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Architecture")
+
+    // 1. Pillar 1: DirectFG ABI & Feature Flags
+    PRISMX_ASSERT(PRISMX_D3D12_FRAME_GENERATION_TIER_1_0 == 10u);
+    PRISMX_ASSERT(D3D12_FEATURE_ABI_D3D12_FRAME_GENERATION == 129u);
+    PRISMX_ASSERT(D3D12_FRAME_GENERATION_FLAG_ALLOW_ASYNC_FLIP == 0x01u);
+    PRISMX_ASSERT(D3D12_FRAME_GENERATION_FLAG_ENABLE_UI_PROTECTION == 0x02u);
+    PRISMX_ASSERT(D3D12_OPTICAL_FLOW_GRID_SIZE_1X1 == 1u);
+
+    D3D12_FEATURE_DATA_FRAME_GENERATION_ABI feat{};
+    PRISMX_ASSERT(feat.Tier == 10u);
+    PRISMX_ASSERT(feat.OpticalFlowHardwareSupported == 1);
+    PRISMX_ASSERT(feat.AsyncFlipQueueSupported == 1);
+    PRISMX_ASSERT(feat.UiDisocclusionMaskSupported == 1);
+    PRISMX_ASSERT(feat.MaxInterpolatedFramesPerRenderedFrame >= 3u);
+
+    // 2. Pillar 2: Synthetic 3D Scene with Motion Vectors & Stationary HUD
+    constexpr uint32_t width = 256;
+    constexpr uint32_t height = 256;
+    constexpr size_t totalPixels = width * height;
+
+    std::vector<uint32_t> frame0(totalPixels, 0xFF10141Eu);
+    std::vector<uint32_t> frame1(totalPixels, 0xFF10141Eu);
+    std::vector<uint32_t> frameInterpTruth(totalPixels, 0xFF10141Eu);
+    std::vector<float>    motionVectors(totalPixels * 2, 0.0f);
+    std::vector<float>    depthBuffer(totalPixels, 0.5f);
+    std::vector<uint8_t>  hudMask(totalPixels, 0);
+    std::vector<uint32_t> outGenerated(totalPixels, 0);
+
+    // Moving 3D box (moving by dx = 4 from frame 0 to frame 1)
+    for (uint32_t y = 80; y < 180; ++y) {
+        for (uint32_t x = 60; x < 140; ++x) {
+            // Frame 0: x: 60..140
+            frame0[y * width + x] = 0xFF2A85FFu; // Azure 3D box
+
+            // Frame 1: x: 64..144
+            frame1[y * width + (x + 4)] = 0xFF2A85FFu;
+
+            // Ground truth intermediate at t = 0.5: x: 62..142
+            frameInterpTruth[y * width + (x + 2)] = 0xFF2A85FFu;
+        }
+
+        // Dilated Optical Flow field across the motion trajectory
+        for (uint32_t x = 60; x <= 144; ++x) {
+            motionVectors[(y * width + x) * 2 + 0] = 4.0f; // dx = 4
+            motionVectors[(y * width + x) * 2 + 1] = 0.0f;
+        }
+    }
+
+    // Stationary HUD Elements (e.g. Crosshair & Health Bar)
+    // Crosshair at (128, 128)
+    for (int dy = -4; dy <= 4; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            size_t idx = (128 + dy) * width + (128 + dx);
+            frame0[idx] = 0xFF00FF66u; // Neon HUD green
+            frame1[idx] = 0xFF00FF66u;
+            frameInterpTruth[idx] = 0xFF00FF66u;
+            hudMask[idx] = 1;
+        }
+    }
+
+    // Health Bar at y: 20..28, x: 20..100
+    for (uint32_t y = 20; y < 28; ++y) {
+        for (uint32_t x = 20; x < 100; ++x) {
+            size_t idx = y * width + x;
+            frame0[idx] = 0xFFFF3344u; // HUD red
+            frame1[idx] = 0xFFFF3344u;
+            frameInterpTruth[idx] = 0xFFFF3344u;
+            hudMask[idx] = 1;
+        }
+    }
+
+    // 3. Pillar 3 & 4: DirectFG Pipeline Execution & Metric Verification
+    auto pipeline = CreateDirectFrameGenerationPipeline(width, height);
+    PRISMX_ASSERT(pipeline != nullptr);
+
+    pipeline->InterpolateFrame(frame0.data(),
+                               frame1.data(),
+                               motionVectors.data(),
+                               depthBuffer.data(),
+                               hudMask.data(),
+                               outGenerated.data(),
+                               frameInterpTruth.data());
+
+    const auto& tel = pipeline->GetTelemetry();
+    PRISMX_ASSERT(tel.RenderedFramesInput == 2u);
+    PRISMX_ASSERT(tel.GeneratedFramesOutput == 1u);
+    PRISMX_ASSERT(tel.TotalFramesPresented == 3u);
+    PRISMX_ASSERT(tel.UiPixelsProtectedCount > 0u);
+    PRISMX_ASSERT(tel.FramePacingVarianceMs < 0.2f);
+    PRISMX_ASSERT(tel.MeasuredPsnrDb > 35.0f);
+    PRISMX_ASSERT(tel.MeasuredSsim > 0.95f);
+
+    // Verify HUD pixels were preserved exactly
+    for (uint32_t y = 20; y < 28; ++y) {
+        for (uint32_t x = 20; x < 100; ++x) {
+            size_t idx = y * width + x;
+            PRISMX_ASSERT(outGenerated[idx] == 0xFFFF3344u);
+        }
+    }
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15513,9 +15619,10 @@ int main() {
     if (Test_PrismX_Official_WorkGraphs11_MeshNodes_And_AutonomousGpuPipeline_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DXR12_OpacityMicromaps_And_ShaderExecutionReordering_Architecture() != 0) return 1;
     if (Test_PrismX_Official_CooperativeVectors_WaveMMA_And_InShaderNeuralGraphics_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (128/128)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (129/129)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
