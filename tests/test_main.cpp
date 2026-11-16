@@ -15745,6 +15745,61 @@ int Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture")
+
+    // 1. Pillar 1: IoRing ABI & Structure Size Assertions
+    PRISMX_ASSERT(sizeof(PRISMX_IORING_SQE) == 64u);
+    PRISMX_ASSERT(sizeof(PRISMX_IORING_CQE) == 16u);
+    PRISMX_ASSERT(PRISMX_IORING_OP_READ == 1u);
+    PRISMX_ASSERT(PRISMX_IORING_OP_NVME_BYPASS_DMA == 4u);
+
+    // 2. Pillar 2: Create Ring & Batch Enqueue (64 Requests)
+    auto ring = CreateIoRing(1024, 2048);
+    PRISMX_ASSERT(ring != nullptr);
+
+    char dummyBuffer[4096]{ 0 };
+    for (uint32_t i = 0; i < 32; ++i) {
+        uint64_t userData = 1000ULL + i;
+        bool ok = ring->PrepareRead(userData, 3, dummyBuffer, 4096, i * 4096);
+        PRISMX_ASSERT(ok == true);
+    }
+
+    for (uint32_t i = 32; i < 64; ++i) {
+        uint64_t userData = 1000ULL + i;
+        bool ok = ring->PrepareBypassDma(userData, 0x10000ULL + i * 8, 0x0000000E00000000ULL + i * 4096, 4096);
+        PRISMX_ASSERT(ok == true);
+    }
+
+    // Submit the 64-request batch with 1 doorbell / wake call
+    uint32_t submitted = ring->Submit();
+    PRISMX_ASSERT(submitted == 64u);
+
+    // 3. Pillar 3: Lock-Free CQE Draining & Correlation Check
+    std::vector<PRISMX_IORING_CQE> cqes;
+    uint32_t drained = ring->PeekBatchCqe(cqes, 64);
+    PRISMX_ASSERT(drained == 64u);
+    PRISMX_ASSERT(cqes.size() == 64u);
+
+    for (uint32_t i = 0; i < 64; ++i) {
+        PRISMX_ASSERT(cqes[i].UserData == 1000ULL + i);
+        PRISMX_ASSERT(cqes[i].Result == 4096); // 4096 bytes completed
+    }
+
+    // 4. Pillar 4: Telemetry & Syscall Reduction Verification
+    const auto& tel = ring->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalSubmitted == 64u);
+    PRISMX_ASSERT(tel.TotalCompleted == 64u);
+    PRISMX_ASSERT(tel.SyscallsAvoidedCount == 63u); // 63 syscalls completely eliminated!
+    PRISMX_ASSERT(tel.MaxBatchSizeObserved == 64u);
+    PRISMX_ASSERT(tel.AverageBatchSize >= 64.0f);
+    PRISMX_ASSERT(tel.ThroughputMBps > 10000.0f);
+    PRISMX_ASSERT(tel.LockFreeIntegrityVerified == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15884,9 +15939,10 @@ int main() {
     if (Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (133/133)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (134/134)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
