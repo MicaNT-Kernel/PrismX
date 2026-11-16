@@ -67,3 +67,4 @@
 #include "prismx/directstorage_12_bypassio_gdeflate.hpp"
 #include "prismx/display_timing_vrr_mpo.hpp"
 #include "prismx/ioring_lockfree_stream_queue.hpp"
+#include "prismx/uefi_gop_display_handover.hpp"

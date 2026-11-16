@@ -15800,6 +15800,63 @@ int Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_UefiGop_DisplayHandover_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_UefiGop_DisplayHandover_Architecture")
+
+    // 1. Pillar 1: UEFI GOP Descriptors & Structure Definitions
+    PRISMX_UEFI_FRAMEBUFFER_DESCRIPTOR uefiFb{};
+    uefiFb.FrameBufferBasePhysical = 0x00000000E0000000ULL;
+    uefiFb.FrameBufferSize = 3840ULL * 2160ULL * 4ULL;
+    uefiFb.ModeInfo.HorizontalResolution = 3840;
+    uefiFb.ModeInfo.VerticalResolution = 2160;
+    uefiFb.ModeInfo.PixelsPerScanLine = 3840;
+    uefiFb.ModeInfo.PixelFormat = GOP_PIXEL_BGR_RESERVED_8BIT_PER_COLOR;
+
+    auto engine = CreateUefiGopHandoverEngine(uefiFb);
+    PRISMX_ASSERT(engine != nullptr);
+    PRISMX_ASSERT(engine->GetDescriptor().ModeInfo.HorizontalResolution == 3840);
+    PRISMX_ASSERT(engine->GetDescriptor().ModeInfo.VerticalResolution == 2160);
+
+    // 2. Pillar 2: Firmware Bootscreen Splash Rendering
+    // Render 128x128 Cyan logo at center (1856, 1016)
+    const uint32_t cyanColor = 0x00FFFF00;
+    engine->RenderBootSplash(1856, 1016, 128, 128, cyanColor);
+
+    const auto& lfb = engine->GetSimulatedFramebuffer();
+    const uint32_t* fbPixels = reinterpret_cast<const uint32_t*>(lfb.data());
+    // Verify center pixel is cyan
+    PRISMX_ASSERT(fbPixels[1016 * 3840 + 1856] == cyanColor);
+    // Verify corner pixel is dark Mica background (0x1A1A1A1A)
+    PRISMX_ASSERT(fbPixels[0] == 0x1A1A1A1A);
+
+    // 3. Pillar 3: Zero-Flicker Handover to PrismX WDDM 3.2 Display Timing Controller
+    PRISMX_DISPLAY_TIMING_CONFIG timingConfig{};
+    timingConfig.HorizontalActive = 3840;
+    timingConfig.VerticalActive = 2160;
+    auto displayController = CreateDisplayTimingController(timingConfig);
+    PRISMX_ASSERT(displayController != nullptr);
+
+    std::vector<uint32_t> wddmBackbuffer;
+    bool migrated = engine->MigrateToWddm32(*displayController, wddmBackbuffer);
+    PRISMX_ASSERT(migrated == true);
+    PRISMX_ASSERT(wddmBackbuffer.size() == 3840 * 2160);
+
+    // Verify seamless pixel preservation: bootscreen logo remains intact
+    PRISMX_ASSERT(wddmBackbuffer[1016 * 3840 + 1856] == cyanColor);
+    PRISMX_ASSERT(wddmBackbuffer[0] == 0x1A1A1A1A);
+
+    // 4. Pillar 4: Telemetry verification
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalHandoverFramesProcessed == 1u);
+    PRISMX_ASSERT(tel.PixelsPreservedCount == 3840 * 2160);
+    PRISMX_ASSERT(tel.ZeroFlickerTransitionVerified == true);
+    PRISMX_ASSERT(tel.Wddm32ScanoutActive == true);
+    PRISMX_ASSERT(tel.MigrationTimeMs < 1.0f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15940,9 +15997,10 @@ int main() {
     if (Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture() != 0) return 1;
     if (Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_UefiGop_DisplayHandover_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (134/134)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (135/135)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
