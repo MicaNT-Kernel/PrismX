@@ -15857,6 +15857,111 @@ int Test_PrismX_Official_UefiGop_DisplayHandover_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture")
+
+    // 1. Pillar 1: Win32 Message Loop & Priority Dispatching
+    Win32MessageQueue queue;
+    void* testHwnd = reinterpret_cast<void*>(0x00000000000B0200ULL);
+
+    queue.PostMessage(testHwnd, PRISMX_WM_CREATE, 0, 0, 1000);
+    queue.PostMessage(testHwnd, PRISMX_WM_SIZE, 0, (2160 << 16) | 3840, 1050);
+    queue.PostMessage(testHwnd, PRISMX_WM_PAINT, 0, 0, 1100);
+    queue.PostMessage(testHwnd, PRISMX_WM_KEYDOWN, 0x41 /* VK_A */, 0, 1150);
+    queue.PostMessage(testHwnd, PRISMX_WM_KEYUP, 0x41 /* VK_A */, 0, 1200);
+
+    PRISMX_ASSERT(queue.GetPendingCount() == 5u);
+
+    // Verify PeekMessage with PM_NOREMOVE does not remove message
+    PRISMX_MSG peekMsg{};
+    bool peeked = queue.PeekMessage(peekMsg, testHwnd, 0, 0, PRISMX_PM_NOREMOVE);
+    PRISMX_ASSERT(peeked == true);
+    PRISMX_ASSERT(peekMsg.message == PRISMX_WM_CREATE);
+    PRISMX_ASSERT(queue.GetPendingCount() == 5u);
+
+    // Verify GetMessage retrieves in FIFO sequence
+    PRISMX_MSG gotMsg{};
+    bool got = queue.GetMessage(gotMsg, testHwnd);
+    PRISMX_ASSERT(got == true);
+    PRISMX_ASSERT(gotMsg.message == PRISMX_WM_CREATE);
+    PRISMX_ASSERT(queue.GetPendingCount() == 4u);
+
+    // 2. Pillar 2: 8000Hz Sub-Millisecond Raw Input Queuing & Coalescing
+    auto router = CreateSurShell540HzCompositorRouter();
+    PRISMX_ASSERT(router != nullptr);
+
+    // Simulate 16 raw mouse reports arriving within a single 1.85ms frame interval (8000Hz polling)
+    for (int i = 0; i < 16; ++i) {
+        PRISMX_RAW_MOUSE_PACKET pkt{};
+        pkt.deltaX = 2;  // 2 counts per report
+        pkt.deltaY = -1; // -1 count per report
+        pkt.rawButtons = (i == 15) ? 1 : 0; // Left click on 16th report
+        pkt.timestampQpc = 10000 + i * 12;  // 125µs apart
+        router->PushRawMouseInput(pkt);
+    }
+
+    // Verify coalescing aggregates all 16 reports into a single consolidated packet
+    auto coalesced = router->CoalesceRawInput();
+    PRISMX_ASSERT(coalesced.deltaX == 32);  // 16 * 2
+    PRISMX_ASSERT(coalesced.deltaY == -16); // 16 * -1
+    PRISMX_ASSERT(coalesced.rawButtons == 1u);
+
+    // 3. Pillar 3: SurShell 540Hz Compositor Event Routing & Pacing
+    bool inputReceived = false;
+    int32_t receivedDeltaX = 0;
+    int32_t receivedDeltaY = 0;
+    bool paintReceived = false;
+    bool keydownReceived = false;
+
+    router->RegisterHandler(PRISMX_WM_INPUT, [&](void* h, uint32_t msg, uintptr_t w, intptr_t l) -> intptr_t {
+        (void)h; (void)msg; (void)w;
+        inputReceived = true;
+        receivedDeltaX = static_cast<int16_t>(l & 0xFFFF);
+        receivedDeltaY = static_cast<int16_t>((l >> 16) & 0xFFFF);
+        return 0;
+    });
+
+    router->RegisterHandler(PRISMX_WM_PAINT, [&](void*, uint32_t, uintptr_t, intptr_t) -> intptr_t {
+        paintReceived = true;
+        return 0;
+    });
+
+    router->RegisterHandler(PRISMX_WM_KEYDOWN, [&](void*, uint32_t, uintptr_t w, intptr_t) -> intptr_t {
+        if (w == 0x41) keydownReceived = true;
+        return 0;
+    });
+
+    // Push another batch of 16 raw input packets and run 540Hz compositor tick
+    for (int i = 0; i < 16; ++i) {
+        PRISMX_RAW_MOUSE_PACKET pkt{};
+        pkt.deltaX = 1;
+        pkt.deltaY = 3;
+        pkt.timestampQpc = 20000 + i * 12;
+        router->PushRawMouseInput(pkt);
+    }
+
+    bool tickOk = router->RunCompositorTick(queue, testHwnd);
+    PRISMX_ASSERT(tickOk == true);
+    PRISMX_ASSERT(inputReceived == true);
+    PRISMX_ASSERT(receivedDeltaX == 16);
+    PRISMX_ASSERT(receivedDeltaY == 48);
+    PRISMX_ASSERT(paintReceived == true);
+    PRISMX_ASSERT(keydownReceived == true);
+
+    // 4. Pillar 4: Esports Telemetry Verification
+    const auto& tel = router->GetTelemetry();
+    PRISMX_ASSERT(tel.CompositorFramesRendered540Hz == 1u);
+    PRISMX_ASSERT(tel.RawInputReportsReceived == 32u);
+    PRISMX_ASSERT(tel.RawInputReportsCoalesced == 32u);
+    PRISMX_ASSERT(tel.ZeroLatencyWaitableSignaled == true);
+    PRISMX_ASSERT(tel.EsportsPacingIntegrityVerified == true);
+    PRISMX_ASSERT(tel.FrameBudgetMicroseconds > 1851.0f && tel.FrameBudgetMicroseconds < 1852.0f);
+    PRISMX_ASSERT(tel.InputToPhotonLatencyMicroseconds < 1000.0f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15998,9 +16103,10 @@ int main() {
     if (Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture() != 0) return 1;
     if (Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture() != 0) return 1;
     if (Test_PrismX_Official_UefiGop_DisplayHandover_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (135/135)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (136/136)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

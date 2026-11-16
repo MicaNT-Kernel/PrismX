@@ -68,3 +68,4 @@
 #include "prismx/display_timing_vrr_mpo.hpp"
 #include "prismx/ioring_lockfree_stream_queue.hpp"
 #include "prismx/uefi_gop_display_handover.hpp"
+#include "prismx/win32_message_loop_swapchain_latency.hpp"
