@@ -72,3 +72,4 @@
 #include "prismx/wavert_xaudio2_spatial_audio.hpp"
 #include "prismx/xhci_usb32_hid_gamepad_xinput.hpp"
 #include "prismx/mica_acrylic_directcomposition_pipeline.hpp"
+#include "prismx/surshell_desktop_compositor_taskbar_snap_layouts.hpp"

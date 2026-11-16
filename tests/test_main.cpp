@@ -16183,6 +16183,113 @@ int Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture() 
     return 0;
 }
 
+// ============================================================================
+// 140. SurShell Desktop Shell, Modern Taskbar Compositor & Snap Layouts Governor
+// ============================================================================
+int Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture")
+
+    using namespace prismx::surshell;
+    using namespace prismx::composition;
+
+    SurShellCompositorConfig cfg{};
+    cfg.DisplayWidth = 3840;
+    cfg.DisplayHeight = 2160;
+    cfg.TaskbarHeight = 48;
+    cfg.Position = TaskbarPosition::Bottom;
+    cfg.SnapThresholdPixels = 32;
+
+    auto engine = CreateSurShellDesktopEngine(cfg);
+    PRISMX_ASSERT(engine != nullptr);
+
+    // 1. Pillar 1: Usable Work Area Geometry
+    auto wa = engine->GetUsableWorkArea();
+    PRISMX_ASSERT(wa.left == 0 && wa.top == 0);
+    PRISMX_ASSERT(wa.right == 3840 && wa.bottom == 2112);
+    PRISMX_ASSERT(wa.Width() == 3840 && wa.Height() == 2112);
+
+    // 2. Pillar 2: Magnetic Window Snap Layout Rect Calculations
+    auto leftHalf = engine->CalculateSnapRect(SnapZoneType::LeftHalf);
+    PRISMX_ASSERT(leftHalf.left == 0 && leftHalf.right == 1920);
+    PRISMX_ASSERT(leftHalf.top == 0 && leftHalf.bottom == 2112);
+
+    auto rightHalf = engine->CalculateSnapRect(SnapZoneType::RightHalf);
+    PRISMX_ASSERT(rightHalf.left == 1920 && rightHalf.right == 3840);
+
+    auto tlQuad = engine->CalculateSnapRect(SnapZoneType::TopLeftQuadrant);
+    PRISMX_ASSERT(tlQuad.left == 0 && tlQuad.right == 1920 && tlQuad.top == 0 && tlQuad.bottom == 1056);
+
+    auto brQuad = engine->CalculateSnapRect(SnapZoneType::BottomRightQuadrant);
+    PRISMX_ASSERT(brQuad.left == 1920 && brQuad.right == 3840 && brQuad.top == 1056 && brQuad.bottom == 2112);
+
+    auto p70 = engine->CalculateSnapRect(SnapZoneType::PrimaryLeft70);
+    PRISMX_ASSERT(p70.Width() == 2688);
+
+    auto s30 = engine->CalculateSnapRect(SnapZoneType::SecondaryRight30);
+    PRISMX_ASSERT(s30.left == 2688 && s30.right == 3840);
+
+    auto maxRect = engine->CalculateSnapRect(SnapZoneType::Maximize);
+    PRISMX_ASSERT(maxRect.Width() == 3840 && maxRect.Height() == 2112);
+
+    // 3. Pillar 3: Magnetic Edge & Corner Cursor Snap Targeting
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(10, 10) == SnapZoneType::TopLeftQuadrant);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(3835, 10) == SnapZoneType::TopRightQuadrant);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(10, 2105) == SnapZoneType::BottomLeftQuadrant);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(3835, 2105) == SnapZoneType::BottomRightQuadrant);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(1920, 10) == SnapZoneType::Maximize);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(10, 1000) == SnapZoneType::LeftHalf);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(3835, 1000) == SnapZoneType::RightHalf);
+    PRISMX_ASSERT(engine->EvaluateSnapTarget(1000, 1000) == SnapZoneType::None);
+
+    // 4. Pillar 4: Taskbar Docking & System Notification Tray
+    void* hwnd1 = reinterpret_cast<void*>(0x20001);
+    void* hwnd2 = reinterpret_cast<void*>(0x20002);
+
+    TaskbarItemDesc tItem1{ 101, hwnd1, "Terminal", true, false, { 100, 2112, 148, 2160 } };
+    TaskbarItemDesc tItem2{ 102, hwnd2, "Game Client", false, false, { 152, 2112, 200, 2160 } };
+    engine->AddTaskbarItem(tItem1);
+    engine->AddTaskbarItem(tItem2);
+    PRISMX_ASSERT(engine->GetTaskbarItems().size() == 2);
+
+    engine->SetTaskbarActive(hwnd2);
+    PRISMX_ASSERT(!engine->GetTaskbarItems()[0].IsActive);
+    PRISMX_ASSERT(engine->GetTaskbarItems()[1].IsActive);
+
+    SystemTrayItemDesc tray1{ 1, "Audio 7.1.4 Output", false, { 3700, 2112, 3724, 2160 } };
+    SystemTrayItemDesc tray2{ 2, "2.5GbE Network", true, { 3730, 2112, 3754, 2160 } };
+    engine->AddSystemTrayItem(tray1);
+    engine->AddSystemTrayItem(tray2);
+    PRISMX_ASSERT(engine->GetTrayItems().size() == 2);
+
+    PRISMX_ASSERT(engine->RemoveTaskbarItem(hwnd1) == true);
+    PRISMX_ASSERT(engine->GetTaskbarItems().size() == 1);
+
+    // 5. Pillar 5: Multi-Monitor Virtual Desktops & Telemetry
+    PRISMX_ASSERT(engine->GetVirtualDesktops().size() == 1);
+    PRISMX_ASSERT(engine->GetVirtualDesktops()[0].IsActive == true);
+
+    uint32_t d2 = engine->CreateVirtualDesktop("Gaming & Low Latency");
+    PRISMX_ASSERT(d2 == 2);
+    PRISMX_ASSERT(engine->GetVirtualDesktops().size() == 2);
+
+    bool switched = engine->SwitchVirtualDesktop(d2);
+    PRISMX_ASSERT(switched == true);
+    PRISMX_ASSERT(engine->GetVirtualDesktops()[0].IsActive == false);
+    PRISMX_ASSERT(engine->GetVirtualDesktops()[1].IsActive == true);
+
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalSnapEvents >= 7u);
+    PRISMX_ASSERT(tel.VirtualDesktopSwitches == 1u);
+    PRISMX_ASSERT(tel.TaskbarRenderPasses >= 4u);
+    PRISMX_ASSERT(tel.SystemTrayEvents == 2u);
+    PRISMX_ASSERT(tel.AverageTaskSwitchLatencyMicroseconds < 350.0f);
+    PRISMX_ASSERT(tel.ZeroLatencyAltTabVerified == true);
+    PRISMX_ASSERT(tel.MagneticSnapFeedbackVerified == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16328,9 +16435,10 @@ int main() {
     if (Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture() != 0) return 1;
     if (Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture() != 0) return 1;
     if (Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (139/139)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (140/140)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
