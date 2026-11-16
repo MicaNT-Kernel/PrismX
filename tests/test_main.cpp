@@ -16041,6 +16041,72 @@ int Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture")
+    using namespace prismx::hid;
+
+    // 1. Pillar 1: xHCI USB 3.2 TRB Transfer Ring & Cycle Bit Wrapping
+    auto controller = CreateXhciGamepadController();
+    PRISMX_ASSERT(controller != nullptr);
+    PRISMX_ASSERT(controller->GetRingCapacity() == 64u);
+
+    // Submit 64 TRBs to verify Link TRB traversal and cycle state toggling
+    for (uint32_t i = 0; i < 64; ++i) {
+        bool ok = controller->SubmitTransferTrb(0x0000000020000000ULL + i * 64, 64, true);
+        PRISMX_ASSERT(ok == true);
+    }
+    PRISMX_ASSERT(controller->GetTelemetry().CycleBitToggles >= 1u);
+    PRISMX_ASSERT(controller->GetTelemetry().TrbsProcessed == 64u);
+
+    // 2. Pillar 2: 8000Hz USB Microframe Report Parsing & Axis Extraction
+    PRISMX_RAW_HID_GAMEPAD_REPORT rawReport{};
+    rawReport.Buttons = XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_RIGHT_SHOULDER;
+    rawReport.LeftTrigger = 200;
+    rawReport.RightTrigger = 25; // Below threshold 30
+    rawReport.ThumbLX = 20000;
+    rawReport.ThumbLY = -15000; // Well outside deadzone 7849
+    rawReport.ThumbRX = 3000;
+    rawReport.ThumbRY = -4000;  // Inside radial deadzone 8689 (magnitude 5000)
+    rawReport.QpcTimestamp = 100000;
+
+    controller->PushRawHidReport(rawReport);
+
+    // 3. Pillar 3: Official XInput 1.4 API & Radial Deadzone Parity
+    XINPUT_STATE state{};
+    uint32_t res = controller->GetState(0, &state);
+    PRISMX_ASSERT(res == ERROR_SUCCESS);
+    PRISMX_ASSERT(state.Gamepad.wButtons == (XINPUT_GAMEPAD_A | XINPUT_GAMEPAD_DPAD_UP | XINPUT_GAMEPAD_RIGHT_SHOULDER));
+    PRISMX_ASSERT(state.Gamepad.bLeftTrigger == 200);
+    PRISMX_ASSERT(state.Gamepad.bRightTrigger == 0); // Correctly threshold-filtered
+    PRISMX_ASSERT(state.Gamepad.sThumbLX != 0);
+    PRISMX_ASSERT(state.Gamepad.sThumbLY != 0);
+    PRISMX_ASSERT(state.Gamepad.sThumbRX == 0);      // Correctly deadzone-zeroed
+    PRISMX_ASSERT(state.Gamepad.sThumbRY == 0);
+
+    // 4. Pillar 4: Haptic Vibration Feedback (xHCI OUT Endpoint)
+    XINPUT_VIBRATION vib{};
+    vib.wLeftMotorSpeed = 32768;
+    vib.wRightMotorSpeed = 65535;
+    uint32_t vibRes = controller->SetState(0, &vib);
+    PRISMX_ASSERT(vibRes == ERROR_SUCCESS);
+    PRISMX_ASSERT(controller->GetCurrentVibration().wLeftMotorSpeed == 32768);
+    PRISMX_ASSERT(controller->GetCurrentVibration().wRightMotorSpeed == 65535);
+
+    // 5. Pillar 5: Telemetry Verification
+    const auto& tel = controller->GetTelemetry();
+    PRISMX_ASSERT(tel.TrbsProcessed == 64u);
+    PRISMX_ASSERT(tel.ReportsParsed == 1u);
+    PRISMX_ASSERT(tel.PollingRateHz == 8000.0f);
+    PRISMX_ASSERT(tel.PollPeriodMicroseconds == 125.0f);
+    PRISMX_ASSERT(tel.ThumbstickDeadzoneFilteredCount >= 1u);
+    PRISMX_ASSERT(tel.HapticPacketsTransmitted == 1u);
+    PRISMX_ASSERT(tel.ZeroJitterHardwareInterrupterVerified == true);
+    PRISMX_ASSERT(tel.XInput14ParityVerified == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16184,9 +16250,10 @@ int main() {
     if (Test_PrismX_Official_UefiGop_DisplayHandover_Architecture() != 0) return 1;
     if (Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture() != 0) return 1;
     if (Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (137/137)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (138/138)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

@@ -70,3 +70,4 @@
 #include "prismx/uefi_gop_display_handover.hpp"
 #include "prismx/win32_message_loop_swapchain_latency.hpp"
 #include "prismx/wavert_xaudio2_spatial_audio.hpp"
+#include "prismx/xhci_usb32_hid_gamepad_xinput.hpp"
