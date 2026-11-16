@@ -15670,6 +15670,81 @@ int Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_A
     return 0;
 }
 
+int Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture")
+
+    // 1. Pillar 1: Display Timing Configuration & VESA Adaptive-Sync
+    PRISMX_DISPLAY_TIMING_CONFIG config{};
+    config.HorizontalActive = 3840;
+    config.VerticalActive = 2160;
+    config.PixelClockMHz = 1188.0f; // 4K 144Hz
+    config.MinRefreshHz = 48;       // VRR floor
+    config.MaxRefreshHz = 540;      // 540Hz ceiling
+    config.VrrMode = PRISMX_VRR_MODE_ADAPTIVE_SYNC;
+
+    auto controller = CreateDisplayTimingController(config);
+    PRISMX_ASSERT(controller != nullptr);
+    PRISMX_ASSERT(controller->GetVrrMode() == PRISMX_VRR_MODE_ADAPTIVE_SYNC);
+
+    // Query scanline raster beam progress
+    uint32_t scanline = 0;
+    bool inVBlank = false;
+    float timeToVBlankUs = 0.0f;
+
+    // Mid-frame at 50%
+    controller->QueryRasterBeamProgress(0.5f, scanline, inVBlank, timeToVBlankUs);
+    PRISMX_ASSERT(scanline > 1000 && scanline < 1200);
+    PRISMX_ASSERT(inVBlank == false);
+    PRISMX_ASSERT(timeToVBlankUs > 0.0f);
+
+    // End-of-frame inside VBlank at 99%
+    controller->QueryRasterBeamProgress(0.99f, scanline, inVBlank, timeToVBlankUs);
+    PRISMX_ASSERT(scanline >= 2160);
+    PRISMX_ASSERT(inVBlank == true);
+    PRISMX_ASSERT(timeToVBlankUs == 0.0f);
+
+    // 2. Pillar 2: Low Framerate Compensation (LFC) Evaluation
+    // Case A: 30 FPS rendering (33.33ms) - below 48Hz floor
+    controller->ProcessPresent(33.33f);
+    const auto& telLfc = controller->GetTelemetry();
+    PRISMX_ASSERT(telLfc.LowFramerateCompensationActive == true);
+    PRISMX_ASSERT(telLfc.LfcEngagementsCount >= 1u);
+    PRISMX_ASSERT(telLfc.ObservedRefreshRateHz > 55.0f); // Doubled to ~60Hz to prevent flicker
+
+    // Case B: 144 FPS rendering (6.94ms) - well within VRR window
+    controller->ProcessPresent(6.94f);
+    const auto& telVrr = controller->GetTelemetry();
+    PRISMX_ASSERT(telVrr.LowFramerateCompensationActive == false);
+    PRISMX_ASSERT(telVrr.ObservedRefreshRateHz > 140.0f && telVrr.ObservedRefreshRateHz < 145.0f);
+
+    // 3. Pillar 3: Multi-Plane Overlay (MPO) & DirectFlip Zero-Copy Scanout
+    // Viewport plane matches 4K display size with DirectFlip enabled
+    PRISMX_ASSERT(telVrr.DirectFlipActive == true);
+    PRISMX_ASSERT(telVrr.DirectFlipPresentsCount >= 1u);
+    PRISMX_ASSERT(telVrr.ClickToScanoutLatencyMs < 1.5f); // <1.5ms direct scanout latency
+
+    // Fallback: Viewport resized to smaller resolution (e.g. 1920x1080) forces composited path
+    PRISMX_MPO_PLANE_DESC windowedDesc{};
+    windowedDesc.PlaneId = PRISMX_MPO_PLANE_3D_VIEWPORT;
+    windowedDesc.Width = 1920;
+    windowedDesc.Height = 1080;
+    windowedDesc.DirectFlipEnabled = false;
+    controller->ConfigureMpoPlane(windowedDesc);
+
+    controller->ProcessPresent(6.94f);
+    const auto& telComp = controller->GetTelemetry();
+    PRISMX_ASSERT(telComp.DirectFlipActive == false);
+    PRISMX_ASSERT(telComp.CompositedPresentsCount >= 1u);
+    PRISMX_ASSERT(telComp.ClickToScanoutLatencyMs > 5.0f); // Fallback to compositor latency (~6.95ms)
+
+    // 4. Pillar 4: Telemetry verification
+    PRISMX_ASSERT(telComp.TotalPresentsProcessed == 3u);
+    PRISMX_ASSERT(telComp.AverageScanlineJitterUs < 0.15f);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15808,9 +15883,10 @@ int main() {
     if (Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DisplayTiming_VRR_And_MPO_DirectFlip_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (132/132)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (133/133)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
