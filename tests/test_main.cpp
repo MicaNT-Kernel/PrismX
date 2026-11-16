@@ -15962,6 +15962,85 @@ int Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture")
+    using namespace prismx::audio;
+
+    // 1. Pillar 1: WaveRT Circular DMA Buffer Geometry & Low-Latency Sizing
+    PRISMX_WAVERT_BUFFER_CONFIG config{};
+    config.SampleRate = 48000;
+    config.PeriodSamples = 64; // 64 samples @ 48kHz = 1.333ms latency!
+    config.Channels = 2;
+    config.BitsPerSample = 32;
+    config.PeriodCount = 4;
+
+    auto engine = CreateWaveRtSpatialAudioEngine(config);
+    PRISMX_ASSERT(engine != nullptr);
+    PRISMX_ASSERT(engine->GetConfig().SampleRate == 48000u);
+    PRISMX_ASSERT(engine->GetConfig().PeriodSamples == 64u);
+    PRISMX_ASSERT(engine->GetDmaRingBuffer().size() == 2048u); // 64 * 2 * 4 * 4
+
+    // 2. Pillar 2: 7.1.4 Dolby Atmos / Windows Sonic Spatial Panning Calculation
+    AudioListener listener{};
+    listener.position = { 0.0f, 0.0f, 0.0f };
+
+    AudioEmitter frontEmitter{};
+    frontEmitter.position = { 0.0f, 0.0f, 10.0f }; // Directly in front
+    frontEmitter.outerRadius = 50.0f;
+
+    auto pansFront = engine->ComputeSpatialPans(listener, frontEmitter);
+    // Center & front channels must carry predominant energy
+    PRISMX_ASSERT(pansFront.ChannelGains[SPATIAL_FRONT_CENTER] > 0.0f);
+    PRISMX_ASSERT(pansFront.ChannelGains[SPATIAL_FRONT_LEFT] > 0.0f);
+    PRISMX_ASSERT(pansFront.ChannelGains[SPATIAL_FRONT_RIGHT] > 0.0f);
+
+    AudioEmitter leftTopEmitter{};
+    leftTopEmitter.position = { -10.0f, 10.0f, 0.0f }; // High left
+    leftTopEmitter.outerRadius = 50.0f;
+
+    auto pansTopLeft = engine->ComputeSpatialPans(listener, leftTopEmitter);
+    PRISMX_ASSERT(pansTopLeft.ChannelGains[SPATIAL_TOP_FRONT_LEFT] > 0.0f);
+    PRISMX_ASSERT(pansTopLeft.ChannelGains[SPATIAL_SIDE_LEFT] > 0.0f);
+
+    // Verify energy normalization (sum of squares is ~1.0)
+    float sumSq = 0.0f;
+    for (float g : pansTopLeft.ChannelGains) sumSq += g * g;
+    PRISMX_ASSERT(std::abs(sumSq - 1.0f) < 0.05f);
+
+    // 3. Pillar 3: GameInput 8000Hz Direct Audio Trigger Interlock
+    engine->EnqueueGameInputTriggerAudio(frontEmitter, listener, 0.85f);
+    PRISMX_ASSERT(engine->GetTelemetry().GameInputAudioTriggersInterlocked == 1u);
+
+    // Process DMA period and verify cycle advancement & notification callback
+    bool callbackInvoked = false;
+    uint32_t signaledPeriod = 999;
+    engine->RegisterNotificationCallback([&](uint32_t period) {
+        callbackInvoked = true;
+        signaledPeriod = period;
+    });
+
+    bool dmaOk = engine->ProcessDmaPeriod();
+    PRISMX_ASSERT(dmaOk == true);
+    PRISMX_ASSERT(callbackInvoked == true);
+    PRISMX_ASSERT(signaledPeriod == 1u); // Next period
+    PRISMX_ASSERT(engine->GetHwClock().SampleOffset == 64u);
+    PRISMX_ASSERT(engine->GetHwClock().CycleCounter == 1u);
+
+    // 4. Pillar 4: Telemetry Verification
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.DmaBufferCyclesCompleted == 1u);
+    PRISMX_ASSERT(tel.AudioFramesRendered == 64u);
+    PRISMX_ASSERT(tel.SamplesRendered == 128u);
+    PRISMX_ASSERT(tel.DmaUnderflowCount == 0u);
+    PRISMX_ASSERT(tel.BufferPeriodLatencyMs > 1.33f && tel.BufferPeriodLatencyMs < 1.34f);
+    PRISMX_ASSERT(tel.TriggerToEarLatencyMs < 1.5f);
+    PRISMX_ASSERT(tel.SpatialPanningIntegrityVerified == true);
+    PRISMX_ASSERT(tel.WaveRtDmaActive == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16104,9 +16183,10 @@ int main() {
     if (Test_PrismX_Official_IoRing_LockFree_StreamQueue_Architecture() != 0) return 1;
     if (Test_PrismX_Official_UefiGop_DisplayHandover_Architecture() != 0) return 1;
     if (Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (136/136)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (137/137)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

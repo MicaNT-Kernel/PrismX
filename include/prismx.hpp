@@ -69,3 +69,4 @@
 #include "prismx/ioring_lockfree_stream_queue.hpp"
 #include "prismx/uefi_gop_display_handover.hpp"
 #include "prismx/win32_message_loop_swapchain_latency.hpp"
+#include "prismx/wavert_xaudio2_spatial_audio.hpp"
