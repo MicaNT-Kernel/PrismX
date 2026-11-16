@@ -64,3 +64,4 @@
 #include "prismx/directfg_frame_generation_optical_flow.hpp"
 #include "prismx/directlatency_reflex_antilag_pacing.hpp"
 #include "prismx/dxr_13_curve_raytracing_swept_spheres.hpp"
+#include "prismx/directstorage_12_bypassio_gdeflate.hpp"

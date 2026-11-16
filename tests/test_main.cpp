@@ -15603,6 +15603,73 @@ int Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architectu
     return 0;
 }
 
+int Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_Architecture")
+
+    // 1. Pillar 1: DirectStorage 1.2 Factory & Interfaces
+    auto factory = CreateDirectStorage12Factory();
+    PRISMX_ASSERT(factory.Get() != nullptr);
+
+    // Verify BypassIO Query & Driver Support
+    auto bypassInfo = factory->QueryBypassIoSupport(L"\\Device\\HarddiskVolume1\\AssetStream.bin");
+    PRISMX_ASSERT(bypassInfo.SupportStatus == DSTORAGE_BYPASSIO_SUPPORT_OK);
+    PRISMX_ASSERT(std::string(bypassInfo.FailureReason).find("MicaNT Sovereign Clean-Room BypassIO") != std::string::npos);
+
+    // Verify Compression Support flags (CPU + GPU Direct)
+    uint32_t compSupport = factory->GetCompressionSupport();
+    PRISMX_ASSERT((compSupport & DSTORAGE_COMPRESSION_SUPPORT_GPU_DIRECT) != 0);
+
+    // 2. Pillar 2: Create DirectStorage 1.2 Queue & Options
+    DSTORAGE_QUEUE_DESC qDesc{};
+    qDesc.SourceType = DSTORAGE_REQUEST_SOURCE_MEMORY;
+    qDesc.Capacity = 1024;
+    qDesc.Priority = DSTORAGE_PRIORITY_HIGH;
+    qDesc.Name = "PrismX_BypassIO_StreamQueue";
+
+    ComPtr<IDStorageQueue2> queue;
+    HRESULT hr = factory->CreateQueue2(&qDesc, IID_IDStorageQueue2, queue.PutVoid());
+    PRISMX_ASSERT(SUCCEEDED(hr));
+    PRISMX_ASSERT(queue.Get() != nullptr);
+    PRISMX_ASSERT(queue->GetBypassIoStatus() == DSTORAGE_BYPASSIO_SUPPORT_OK);
+
+    // 3. Pillar 3: GDeflate Tile Compression & Bit-Exact GPU Wave Decompression
+    // Create a 192 KB synthetic asset (3 x 64 KB tiles) with repetitive vertex attributes & runs
+    const size_t rawSize = 3 * 64 * 1024; // 196,608 bytes
+    std::vector<uint8_t> rawAsset(rawSize);
+    for (size_t i = 0; i < rawSize; ++i) {
+        // Repeated float attributes, normal vectors, and padding runs
+        rawAsset[i] = static_cast<uint8_t>((i / 16) % 7 == 0 ? 0x00 : (i % 251));
+    }
+
+    std::vector<uint8_t> compressedAsset = GDeflateCodec::Compress(rawAsset.data(), rawAsset.size());
+    PRISMX_ASSERT(!compressedAsset.empty());
+    PRISMX_ASSERT(compressedAsset.size() < rawAsset.size()); // Proven compression
+
+    // Execute decompression via Queue
+    std::vector<uint8_t> decompressedAsset(rawSize, 0);
+    auto queueImpl = static_cast<DirectStorage12QueueImpl*>(queue.Get());
+    bool streamOk = queueImpl->ExecuteStreamingBuffer(compressedAsset, decompressedAsset);
+    PRISMX_ASSERT(streamOk == true);
+
+    // Bit-exact verification: 100% loss-free match
+    PRISMX_ASSERT(std::memcmp(rawAsset.data(), decompressedAsset.data(), rawSize) == 0);
+
+    // 4. Pillar 4: Telemetry & BypassIO DMA Verification
+    DSTORAGE_12_TELEMETRY tel{};
+    queue->GetTelemetry(&tel);
+    PRISMX_ASSERT(tel.TotalRequestsCompleted >= 1u);
+    PRISMX_ASSERT(tel.TotalCompressedBytesRead == compressedAsset.size());
+    PRISMX_ASSERT(tel.TotalUncompressedBytesDelivered == rawSize);
+    PRISMX_ASSERT(tel.BypassIoDirectDmaBytes == compressedAsset.size());
+    PRISMX_ASSERT(tel.DecompressionWavesDispatched == 3u); // Exactly 3 waves for 3 tiles
+    PRISMX_ASSERT(tel.CompressionRatio > 1.0f);
+    PRISMX_ASSERT(tel.EffectiveThroughputGBps > 10.0f); // >10 GB/s PCIe NVMe BypassIO throughput
+    PRISMX_ASSERT(tel.BypassIoActive == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -15740,9 +15807,10 @@ int main() {
     if (Test_PrismX_Official_DirectFG_HardwareFrameGeneration_And_OpticalFlow_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectLatency_Reflex_AntiLag_Pacing_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DXR13_CurveRaytracing_And_LinearSweptSpheres_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectStorage12_BypassIO_And_GDeflateGpuDecompression_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (131/131)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (132/132)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
