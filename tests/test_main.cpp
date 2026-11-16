@@ -16107,6 +16107,82 @@ int Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture() {
     return 0;
 }
 
+int Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture")
+    using namespace prismx::composition;
+
+    // 1. Pillar 1: DirectComposition Window Node Management & Dynamic Bounds
+    auto engine = CreateMicaAcrylicCompositionEngine(3840, 2160);
+    PRISMX_ASSERT(engine != nullptr);
+
+    void* hwnd1 = reinterpret_cast<void*>(0x00000000000D0100ULL);
+    void* hwnd2 = reinterpret_cast<void*>(0x00000000000D0200ULL);
+
+    PRISMX_WINDOW_VISUAL_DESC win1{};
+    win1.Hwnd = hwnd1;
+    win1.Bounds = { 100, 100, 1380, 820 };
+    win1.Material = CompositionMaterial::MicaDark;
+    win1.ZOrder = 1;
+
+    PRISMX_WINDOW_VISUAL_DESC win2{};
+    win2.Hwnd = hwnd2;
+    win2.Bounds = { 200, 200, 1480, 920 };
+    win2.Material = CompositionMaterial::AcrylicThin;
+    win2.ZOrder = 2;
+
+    engine->AddWindow(win1);
+    engine->AddWindow(win2);
+    PRISMX_ASSERT(engine->GetWindows().size() == 2u);
+
+    // 2. Pillar 2: Z-Ordering & Topmost Hit-Testing
+    // Point (250, 250) is inside both windows, should hit topmost win2 (Z=2)
+    void* hitHwnd = engine->HitTest(250, 250);
+    PRISMX_ASSERT(hitHwnd == hwnd2);
+
+    // Bring Window 1 to front
+    engine->BringToFront(hwnd1);
+    hitHwnd = engine->HitTest(250, 250);
+    PRISMX_ASSERT(hitHwnd == hwnd1);
+
+    // 3. Pillar 3: Hardware Mica & Acrylic Backdrop Shader Synthesis
+    PRISMX_COMPOSITION_COLOR desktopBg{ 0.1f, 0.2f, 0.3f, 1.0f };
+    PRISMX_COMPOSITION_COLOR micaTint{ 0.12f, 0.12f, 0.14f, 0.85f };
+    auto micaSample = engine->SynthesizeMica(desktopBg, micaTint);
+    PRISMX_ASSERT(micaSample.a == 1.0f);
+    PRISMX_ASSERT(micaSample.r > 0.0f && micaSample.g > 0.0f && micaSample.b > 0.0f);
+
+    PRISMX_COMPOSITION_COLOR acrylicBackdrop{ 0.4f, 0.5f, 0.6f, 1.0f };
+    PRISMX_COMPOSITION_COLOR acrylicTint{ 0.2f, 0.2f, 0.25f, 0.6f };
+    auto acrylicSample = engine->SynthesizeAcrylic(acrylicBackdrop, acrylicTint);
+    PRISMX_ASSERT(acrylicSample.a == 0.6f);
+    PRISMX_ASSERT(acrylicSample.r > 0.0f && acrylicSample.g > 0.0f && acrylicSample.b > 0.0f);
+
+    // Verify Gaussian kernel normalization
+    float kernelSum = 0.0f;
+    for (float w : engine->GetGaussianKernel()) kernelSum += w;
+    PRISMX_ASSERT(std::abs(kernelSum - 1.0f) < 0.001f);
+
+    // 4. Pillar 4: DirectComposition Independent Flip Promotion
+    // Resize Window 1 to full 4K desktop (3840x2160)
+    bool updated = engine->UpdateWindowBounds(hwnd1, { 0, 0, 3840, 2160 });
+    PRISMX_ASSERT(updated == true);
+    PRISMX_ASSERT(engine->GetTelemetry().IndependentFlipPromotions == 1u);
+
+    // 5. Pillar 5: Telemetry Verification
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalWindowsManaged == 2u);
+    PRISMX_ASSERT(tel.MicaSurfacesRendered == 1u);
+    PRISMX_ASSERT(tel.AcrylicSurfacesRendered == 1u);
+    PRISMX_ASSERT(tel.IndependentFlipPromotions == 1u);
+    PRISMX_ASSERT(tel.HitTestsPerformed >= 2u);
+    PRISMX_ASSERT(tel.AverageCompositorLatencyMicroseconds < 650.0f);
+    PRISMX_ASSERT(tel.ZeroDwmQueueLatencyVerified == true);
+    PRISMX_ASSERT(tel.HardwareBackdropShadersVerified == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16251,9 +16327,10 @@ int main() {
     if (Test_PrismX_Official_Win32_MessageLoop_Swapchain_Latency_Architecture() != 0) return 1;
     if (Test_PrismX_Official_WaveRT_XAudio2_SpatialAudio_Architecture() != 0) return 1;
     if (Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (138/138)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (139/139)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
