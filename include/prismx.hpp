@@ -73,3 +73,4 @@
 #include "prismx/xhci_usb32_hid_gamepad_xinput.hpp"
 #include "prismx/mica_acrylic_directcomposition_pipeline.hpp"
 #include "prismx/surshell_desktop_compositor_taskbar_snap_layouts.hpp"
+#include "prismx/directwrite_cleartype_gpu_typography_pipeline.hpp"

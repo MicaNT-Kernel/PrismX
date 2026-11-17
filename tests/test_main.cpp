@@ -16290,6 +16290,82 @@ int Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 141. DirectWrite Typography, Sub-Pixel ClearType & GPU Glyph Atlas Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture")
+
+    using namespace prismx::typography;
+    using namespace prismx::composition;
+
+    auto engine = CreateDirectWriteGpuTypographyEngine(2048, 2048);
+    PRISMX_ASSERT(engine != nullptr);
+
+    // 1. Pillar 1: Font Design Metrics
+    const auto& metrics = engine->GetFontDesignMetrics();
+    PRISMX_ASSERT(metrics.UnitsPerEm == 2048);
+    PRISMX_ASSERT(metrics.Ascender == 1900);
+    PRISMX_ASSERT(metrics.Descender == -500);
+    PRISMX_ASSERT(metrics.CapHeight == 1450);
+
+    // 2. Pillar 2: OpenType Pairwise Kerning Tables
+    PRISMX_ASSERT(engine->GetKerning(65, 86) == -150); // 'A' and 'V'
+    PRISMX_ASSERT(engine->GetKerning(84, 111) == -120); // 'T' and 'o'
+    PRISMX_ASSERT(engine->GetKerning(88, 90) == 0);     // 'X' and 'Z'
+
+    // 3. Pillar 3: Dynamic GPU Glyph Atlas Shelf Packing
+    float u0 = 0.0f, v0 = 0.0f, u1 = 0.0f, v1 = 0.0f;
+    PRISMX_ASSERT(engine->AllocateAtlasSlot(32, 48, u0, v0, u1, v1) == true);
+    PRISMX_ASSERT(u0 >= 0.0f && u1 <= 1.0f && u1 > u0);
+    PRISMX_ASSERT(v0 >= 0.0f && v1 <= 1.0f && v1 > v0);
+
+    float u0_b = 0.0f, v0_b = 0.0f, u1_b = 0.0f, v1_b = 0.0f;
+    PRISMX_ASSERT(engine->AllocateAtlasSlot(64, 48, u0_b, v0_b, u1_b, v1_b) == true);
+    PRISMX_ASSERT(u0_b > u0); // Shelf advancing along X axis
+
+    // 4. Pillar 4: ClearType 5-Tap Symmetric FIR Sub-Pixel Filtering
+    std::array<float, 7> edgeSamples = { 0.0f, 0.0f, 0.4f, 0.8f, 1.0f, 1.0f, 1.0f };
+    auto subSample = engine->FilterClearTypeSubPixel(edgeSamples);
+    PRISMX_ASSERT(subSample.r <= subSample.g && subSample.g <= subSample.b);
+    PRISMX_ASSERT(subSample.r >= 0.0f && subSample.b <= 1.0f);
+
+    // 5. Pillar 5: Gamma 2.2 Color Correction & Sub-Pixel Blending
+    PRISMX_COMPOSITION_COLOR bg{ 1.0f, 1.0f, 1.0f, 1.0f }; // White background
+    PRISMX_COMPOSITION_COLOR fg{ 0.0f, 0.0f, 0.0f, 1.0f }; // Black text
+    ClearTypeSubPixelSample subCoverage{ 0.25f, 0.60f, 0.90f };
+    auto blended = engine->BlendClearTypeSubPixel(bg, fg, subCoverage, 2.2f);
+    PRISMX_ASSERT(blended.r > blended.g && blended.g > blended.b); // Sub-pixel RGB differentiation
+    PRISMX_ASSERT(blended.a == 1.0f);
+
+    // 6. Pillar 6: Formatted Text Run Layout
+    TextLayoutRunDesc run{};
+    run.Text = "AV Top Wave";
+    run.FontSize = 24.0f;
+    run.EnableKerning = true;
+    run.EnableClearType = true;
+
+    auto layout = engine->ComputeTextLayout(run);
+    PRISMX_ASSERT(layout.Glyphs.size() == 11);
+    PRISMX_ASSERT(layout.TotalWidth > 0.0f);
+    PRISMX_ASSERT(layout.BaselineY > 0.0f);
+    PRISMX_ASSERT(layout.Glyphs[1].X > layout.Glyphs[0].X);
+
+    // 7. Pillar 7: Telemetry Verification
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalGlyphsCached >= 2u);
+    PRISMX_ASSERT(tel.AtlasAllocations >= 2u);
+    PRISMX_ASSERT(tel.ClearTypeFilterPasses >= 1u);
+    PRISMX_ASSERT(tel.TextLayoutsComputed >= 1u);
+    PRISMX_ASSERT(tel.AverageRasterizationLatencyMicroseconds < 450.0f);
+    PRISMX_ASSERT(tel.SubPixelRgbFilteringVerified == true);
+    PRISMX_ASSERT(tel.GammaCorrection22Verified == true);
+    PRISMX_ASSERT(tel.AtlasShelfPackingValid == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16436,9 +16512,10 @@ int main() {
     if (Test_PrismX_Official_xHCI_USB32_HID_Gamepad_XInput_Architecture() != 0) return 1;
     if (Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture() != 0) return 1;
     if (Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (140/140)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (141/141)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
