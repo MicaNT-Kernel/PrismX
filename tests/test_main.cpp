@@ -16366,6 +16366,83 @@ int Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 142. Direct2D Geometry Realization, Adaptive Tessellation & Gradient Meshes
+// ============================================================================
+int Test_PrismX_Official_Direct2D_Geometry_Realization_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_Direct2D_Geometry_Realization_Architecture")
+
+    using namespace prismx::geometry;
+    using namespace prismx::composition;
+
+    auto engine = CreateDirect2DGeometryEngine(0.25f);
+    PRISMX_ASSERT(engine != nullptr);
+
+    // 1. Pillar 1: Path Figure Construction & Adaptive Bézier Subdivision
+    engine->BeginFigure({ 0.0f, 0.0f });
+    engine->AddLine({ 100.0f, 0.0f });
+    engine->AddCubicBezier({ 150.0f, 50.0f }, { 150.0f, 100.0f }, { 100.0f, 150.0f });
+    engine->AddQuadraticBezier({ 50.0f, 200.0f }, { 0.0f, 150.0f });
+    engine->EndFigure(true);
+
+    const auto& pts = engine->GetFlattenedPoints();
+    PRISMX_ASSERT(pts.size() >= 8); // Subdivided path contains multiple flattened line segments
+
+    // 2. Pillar 2: Fill Geometry Realization & Tessellation
+    PRISMX_COMPOSITION_COLOR fillColor{ 0.0f, 0.8f, 0.9f, 1.0f };
+    auto fillMesh = engine->RealizeFill(fillColor, FillMode::Alternate);
+    PRISMX_ASSERT(fillMesh.TriangleCount >= 6);
+    PRISMX_ASSERT(fillMesh.Indices.size() == fillMesh.TriangleCount * 3);
+    PRISMX_ASSERT(fillMesh.Bounds.Width() > 0 && fillMesh.Bounds.Height() > 0);
+
+    // 3. Pillar 3: Stroke Geometry Realization (Offset Quad Strips)
+    StrokeStyleDesc strokeStyle{};
+    strokeStyle.StrokeWidth = 4.0f;
+    strokeStyle.Join = LineJoin::Miter;
+    strokeStyle.StartCap = CapStyle::Flat;
+    strokeStyle.EndCap = CapStyle::Flat;
+
+    PRISMX_COMPOSITION_COLOR strokeColor{ 1.0f, 1.0f, 1.0f, 1.0f };
+    auto strokeMesh = engine->RealizeStroke(strokeStyle, strokeColor);
+    PRISMX_ASSERT(strokeMesh.TriangleCount >= 10);
+    PRISMX_ASSERT(strokeMesh.Vertices.size() >= 20);
+
+    // 4. Pillar 4: Multi-Stop Linear Gradient Brush Interpolation
+    LinearGradientBrushDesc grad{};
+    grad.StartPoint = { 0.0f, 0.0f };
+    grad.EndPoint = { 100.0f, 0.0f };
+    grad.Stops = {
+        { 0.0f, { 1.0f, 0.0f, 0.0f, 1.0f } }, // Red
+        { 0.5f, { 0.0f, 1.0f, 0.0f, 1.0f } }, // Green
+        { 1.0f, { 0.0f, 0.0f, 1.0f, 1.0f } }  // Blue
+    };
+
+    auto sample0 = engine->SampleLinearGradient(grad, 0.0f);
+    PRISMX_ASSERT(sample0.r == 1.0f && sample0.g == 0.0f && sample0.b == 0.0f);
+
+    auto sampleMid = engine->SampleLinearGradient(grad, 0.25f);
+    PRISMX_ASSERT(std::abs(sampleMid.r - 0.5f) < 0.01f);
+    PRISMX_ASSERT(std::abs(sampleMid.g - 0.5f) < 0.01f);
+    PRISMX_ASSERT(sampleMid.b == 0.0f);
+
+    auto sampleEnd = engine->SampleLinearGradient(grad, 1.0f);
+    PRISMX_ASSERT(sampleEnd.r == 0.0f && sampleEnd.g == 0.0f && sampleEnd.b == 1.0f);
+
+    // 5. Pillar 5: Telemetry Verification
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalPathsRealized >= 2u);
+    PRISMX_ASSERT(tel.TotalTrianglesTessellated >= 16u);
+    PRISMX_ASSERT(tel.BezierSubdivisions >= 1u);
+    PRISMX_ASSERT(tel.StrokesGenerated >= 1u);
+    PRISMX_ASSERT(tel.AverageTessellationLatencyMicroseconds < 420.0f);
+    PRISMX_ASSERT(tel.DeCasteljauToleranceVerified == true);
+    PRISMX_ASSERT(tel.SubPixelAntiAliasingVerified == true);
+    PRISMX_ASSERT(tel.GradientInterpolationVerified == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16513,9 +16590,10 @@ int main() {
     if (Test_PrismX_Official_Mica_Acrylic_DirectComposition_Pipeline_Architecture() != 0) return 1;
     if (Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_Direct2D_Geometry_Realization_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (141/141)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (142/142)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

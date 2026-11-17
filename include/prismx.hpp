@@ -74,3 +74,4 @@
 #include "prismx/mica_acrylic_directcomposition_pipeline.hpp"
 #include "prismx/surshell_desktop_compositor_taskbar_snap_layouts.hpp"
 #include "prismx/directwrite_cleartype_gpu_typography_pipeline.hpp"
+#include "prismx/direct2d_geometry_realization_tessellation_pipeline.hpp"
