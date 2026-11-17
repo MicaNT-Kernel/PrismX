@@ -16547,6 +16547,18 @@ int Test_PrismX_Official_DirectComposition_VisualAnimation_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 144. DirectComposition Independent Flip & VRR MPO Scanout Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_IndependentFlip_Mpo_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_IndependentFlip_Mpo_Architecture")
+
+    PRISMX_ASSERT(prismx::present::VerifyPrismXDirectCompositionIndependentFlipMpoArchitecture() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16696,9 +16708,10 @@ int main() {
     if (Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture() != 0) return 1;
     if (Test_PrismX_Official_Direct2D_Geometry_Realization_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_VisualAnimation_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_IndependentFlip_Mpo_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (143/143)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (144/144)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

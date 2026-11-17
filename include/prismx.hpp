@@ -76,3 +76,4 @@
 #include "prismx/directwrite_cleartype_gpu_typography_pipeline.hpp"
 #include "prismx/direct2d_geometry_realization_tessellation_pipeline.hpp"
 #include "prismx/directcomposition_visual_animation_storyboard_pipeline.hpp"
+#include "prismx/directcomposition_independent_flip_mpo_pipeline.hpp"
