@@ -16443,6 +16443,110 @@ int Test_PrismX_Official_Direct2D_Geometry_Realization_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 143. DirectComposition Visual Layer Animation Storyboards & Spring Physics
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_VisualAnimation_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_VisualAnimation_Architecture")
+
+    using namespace prismx::animation;
+
+    auto engine = CreateDirectCompositionAnimationEngine();
+    PRISMX_ASSERT(engine != nullptr);
+
+    // 1. Pillar 1: Analytical Cubic Bézier Easing Curves
+    CubicBezierControlPoints dummyCp{};
+    float in0 = engine->EvaluateEasingProgress(0.0f, EasingMode::EaseIn, dummyCp);
+    float inMid = engine->EvaluateEasingProgress(0.5f, EasingMode::EaseIn, dummyCp);
+    float in1 = engine->EvaluateEasingProgress(1.0f, EasingMode::EaseIn, dummyCp);
+    PRISMX_ASSERT(in0 == 0.0f && in1 == 1.0f);
+    PRISMX_ASSERT(inMid < 0.5f); // Slow start
+
+    float outMid = engine->EvaluateEasingProgress(0.5f, EasingMode::EaseOut, dummyCp);
+    PRISMX_ASSERT(outMid > 0.5f); // Fast start, decelerating
+
+    // 2. Pillar 2: Harmonic Spring Physics (Critically Damped)
+    SpringParameters critSpring{};
+    critSpring.Stiffness = 180.0f;
+    critSpring.Mass = 1.0f;
+    critSpring.Damping = 2.0f * std::sqrt(critSpring.Stiffness * critSpring.Mass); // zeta = 1.0
+    critSpring.InitialVelocity = 0.0f;
+
+    float s0 = engine->EvaluateSpringPhysics(0.0f, 0.0f, 100.0f, critSpring);
+    PRISMX_ASSERT(s0 == 0.0f);
+
+    float sMid = engine->EvaluateSpringPhysics(0.15f, 0.0f, 100.0f, critSpring);
+    PRISMX_ASSERT(sMid > 0.0f && sMid < 100.0f);
+
+    float sEnd = engine->EvaluateSpringPhysics(1.0f, 0.0f, 100.0f, critSpring);
+    PRISMX_ASSERT(std::abs(sEnd - 100.0f) < 0.05f); // Converged smoothly without overshoot
+
+    // 3. Pillar 3: Harmonic Spring Physics (Underdamped with Bouncy Overshoot)
+    SpringParameters underSpring{};
+    underSpring.Stiffness = 200.0f;
+    underSpring.Mass = 1.0f;
+    underSpring.Damping = 10.0f; // zeta ~ 0.35 (underdamped)
+    underSpring.InitialVelocity = 0.0f;
+
+    bool foundOvershoot = false;
+    for (int step = 1; step <= 50; ++step) {
+        float t = step * 0.01f;
+        float val = engine->EvaluateSpringPhysics(t, 0.0f, 100.0f, underSpring);
+        if (val > 100.0f) {
+            foundOvershoot = true;
+            break;
+        }
+    }
+    PRISMX_ASSERT(foundOvershoot == true);
+
+    // 4. Pillar 4: Multi-Channel 540Hz Timeline Storyboard
+    std::vector<KeyframeDesc> posXKeyframes = {
+        { 0.0f, 0.0f, EasingMode::Spring, {}, critSpring },
+        { 0.5f, 800.0f, EasingMode::Spring, {}, critSpring }
+    };
+    engine->ScheduleAnimation(AnimatedProperty::OffsetX, posXKeyframes);
+
+    std::vector<KeyframeDesc> opacityKeyframes = {
+        { 0.0f, 0.0f, EasingMode::EaseInOut, {}, {} },
+        { 0.3f, 1.0f, EasingMode::EaseInOut, {}, {} }
+    };
+    engine->ScheduleAnimation(AnimatedProperty::Opacity, opacityKeyframes);
+
+    // Step at 540Hz frame rate (1.8518ms / frame)
+    constexpr float dt540Hz = 1.0f / 540.0f;
+    float currentT = 0.0f;
+    float lastPosX = 0.0f;
+    float lastOpacity = 0.0f;
+
+    for (int frame = 0; frame < 300; ++frame) {
+        currentT += dt540Hz;
+        float posX = engine->StepAnimation(AnimatedProperty::OffsetX, currentT);
+        float opacity = engine->StepAnimation(AnimatedProperty::Opacity, currentT);
+
+        PRISMX_ASSERT(posX >= lastPosX);
+        PRISMX_ASSERT(opacity >= lastOpacity);
+        lastPosX = posX;
+        lastOpacity = opacity;
+    }
+
+    PRISMX_ASSERT(lastOpacity == 1.0f);
+    PRISMX_ASSERT(lastPosX > 750.0f);
+
+    // 5. Pillar 5: Telemetry Verification
+    const auto& tel = engine->GetTelemetry();
+    PRISMX_ASSERT(tel.TotalAnimationsScheduled == 2u);
+    PRISMX_ASSERT(tel.FramesInterpolated540Hz >= 300u);
+    PRISMX_ASSERT(tel.SpringPhysicsEvaluations >= 100u);
+    PRISMX_ASSERT(tel.NewtonRaphsonIterations >= 10u);
+    PRISMX_ASSERT(tel.AverageInterpolationLatencyMicroseconds < 150.0f);
+    PRISMX_ASSERT(tel.CriticallyDampedConvergenceVerified == true);
+    PRISMX_ASSERT(tel.CubicBezierContinuityVerified == true);
+    PRISMX_ASSERT(tel.ZeroJitter540HzSyncVerified == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16591,9 +16695,10 @@ int main() {
     if (Test_PrismX_Official_SurShell_Taskbar_SnapLayouts_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectWrite_ClearType_GpuTypography_Architecture() != 0) return 1;
     if (Test_PrismX_Official_Direct2D_Geometry_Realization_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_VisualAnimation_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (142/142)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (143/143)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
