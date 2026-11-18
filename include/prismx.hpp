@@ -78,3 +78,4 @@
 #include "prismx/directcomposition_visual_animation_storyboard_pipeline.hpp"
 #include "prismx/directcomposition_independent_flip_mpo_pipeline.hpp"
 #include "prismx/directcomposition_interaction_tracker_gesture_pipeline.hpp"
+#include "prismx/directcomposition_spatial_3d_transform_pipeline.hpp"

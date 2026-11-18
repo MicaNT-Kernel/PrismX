@@ -16571,6 +16571,18 @@ int Test_PrismX_Official_DirectComposition_InteractionTracker_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 146. DirectComposition Spatial 3D Perspective Transforms & Viewport
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_Spatial3D_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_Spatial3D_Architecture")
+
+    PRISMX_ASSERT(prismx::spatial3d::VerifyPrismXDirectCompositionSpatial3DArchitecture() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16722,9 +16734,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_VisualAnimation_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_IndependentFlip_Mpo_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_InteractionTracker_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_Spatial3D_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (145/145)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (146/146)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
