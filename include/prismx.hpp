@@ -77,3 +77,4 @@
 #include "prismx/direct2d_geometry_realization_tessellation_pipeline.hpp"
 #include "prismx/directcomposition_visual_animation_storyboard_pipeline.hpp"
 #include "prismx/directcomposition_independent_flip_mpo_pipeline.hpp"
+#include "prismx/directcomposition_interaction_tracker_gesture_pipeline.hpp"
