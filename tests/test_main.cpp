@@ -16607,6 +16607,18 @@ int Test_PrismX_Official_DirectComposition_GlassAcrylic_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 149. DirectComposition Visual Tree Clip Geometry & Alpha Masking
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_ClipGeometry_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_ClipGeometry_Architecture")
+
+    PRISMX_ASSERT(prismx::clip_mask::VerifyPrismXDirectCompositionClipGeometryArchitecture() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16761,9 +16773,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_Spatial3D_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_VirtualSurface_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_GlassAcrylic_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_ClipGeometry_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (148/148)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (149/149)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
