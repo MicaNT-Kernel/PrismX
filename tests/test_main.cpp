@@ -16715,6 +16715,18 @@ int Test_PrismX_Official_DirectComposition_DebugTelemetry_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 158. DirectComposition Multi-Queue Async Compute & Work Graph Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_MultiQueue_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_MultiQueue_Architecture")
+
+    PRISMX_ASSERT(prismx::multiqueue_async::VerifyPrismXMilestone158DirectCompositionMultiQueueAsyncComputePipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16878,9 +16890,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_HardwareCursor_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_DesktopDuplication_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_DebugTelemetry_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_MultiQueue_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (157/157)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (158/158)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
