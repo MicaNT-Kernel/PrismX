@@ -100,3 +100,4 @@
 #include "prismx/directcomposition_holographic_lighting_pipeline.hpp"
 #include "prismx/directcomposition_shadow_depth_pipeline.hpp"
 #include "prismx/directcomposition_chromatic_bloom_pipeline.hpp"
+#include "prismx/directcomposition_motion_blur_pipeline.hpp"
