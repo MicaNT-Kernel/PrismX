@@ -92,3 +92,4 @@
 #include "prismx/directcomposition_debug_telemetry_pipeline.hpp"
 #include "prismx/directcomposition_multiqueue_async_compute_pipeline.hpp"
 #include "prismx/directcomposition_text_visual_pipeline.hpp"
+#include "prismx/directcomposition_subtree_caching_pipeline.hpp"
