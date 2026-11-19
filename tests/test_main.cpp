@@ -16799,6 +16799,18 @@ int Test_PrismX_Official_DirectComposition_SuperResolution_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 165. DirectComposition Holographic Lighting & Specular Highlights Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_HolographicLighting_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_HolographicLighting_Architecture")
+
+    PRISMX_ASSERT(prismx::holographic_lighting::VerifyPrismXMilestone165DirectCompositionHolographicLightingPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16969,9 +16981,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_VrrCadence_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_Stereo3D_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_SuperResolution_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_HolographicLighting_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (164/164)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (165/165)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
