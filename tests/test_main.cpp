@@ -16631,6 +16631,18 @@ int Test_PrismX_Official_DirectComposition_VideoHdr10_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 151. DirectComposition Multi-Monitor Virtual Desktop Topology & Cross-Adapter
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_MultiMonitor_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_MultiMonitor_Architecture")
+
+    PRISMX_ASSERT(prismx::multimonitor::VerifyMilestone151DirectCompositionMultiMonitorSubsystem() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16787,9 +16799,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_GlassAcrylic_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ClipGeometry_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_VideoHdr10_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_MultiMonitor_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (150/150)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (151/151)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
