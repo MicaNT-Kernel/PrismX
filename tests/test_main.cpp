@@ -16847,6 +16847,18 @@ int Test_PrismX_Official_DirectComposition_MotionBlur_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 169. DirectComposition Depth-of-Field & Bokeh Hexagonal Aperture Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_DepthOfField_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_DepthOfField_Architecture")
+
+    PRISMX_ASSERT(prismx::dof_bokeh::VerifyPrismXMilestone169DirectCompositionDepthOfFieldPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17021,9 +17033,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_ShadowDepth_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ChromaticBloom_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_MotionBlur_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_DepthOfField_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (168/168)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (169/169)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

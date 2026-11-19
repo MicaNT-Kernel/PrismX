@@ -101,3 +101,4 @@
 #include "prismx/directcomposition_shadow_depth_pipeline.hpp"
 #include "prismx/directcomposition_chromatic_bloom_pipeline.hpp"
 #include "prismx/directcomposition_motion_blur_pipeline.hpp"
+#include "prismx/directcomposition_dof_bokeh_pipeline.hpp"
