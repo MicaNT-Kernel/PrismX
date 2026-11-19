@@ -16775,6 +16775,18 @@ int Test_PrismX_Official_DirectComposition_VrrCadence_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 163. DirectComposition Stereo 3D Stereoscopic Display Swapchain Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_Stereo3D_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_Stereo3D_Architecture")
+
+    PRISMX_ASSERT(prismx::stereo3d::VerifyPrismXMilestone163DirectCompositionStereo3DPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16943,9 +16955,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_SubtreeCaching_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_AlphaLayeredWindow_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_VrrCadence_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_Stereo3D_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (162/162)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (163/163)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

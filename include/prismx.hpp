@@ -95,3 +95,4 @@
 #include "prismx/directcomposition_subtree_caching_pipeline.hpp"
 #include "prismx/directcomposition_alpha_layered_window_pipeline.hpp"
 #include "prismx/directcomposition_vrr_cadence_pipeline.hpp"
+#include "prismx/directcomposition_stereo3d_pipeline.hpp"
