@@ -16823,6 +16823,18 @@ int Test_PrismX_Official_DirectComposition_ShadowDepth_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 167. DirectComposition Chromatic Aberration & Volumetric Bloom Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_ChromaticBloom_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_ChromaticBloom_Architecture")
+
+    PRISMX_ASSERT(prismx::chromatic_bloom::VerifyPrismXMilestone167DirectCompositionChromaticBloomPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16995,9 +17007,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_SuperResolution_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_HolographicLighting_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ShadowDepth_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_ChromaticBloom_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (166/166)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (167/167)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
