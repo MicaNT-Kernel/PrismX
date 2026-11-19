@@ -16883,6 +16883,18 @@ int Test_PrismX_Official_DirectComposition_ScreenSpaceReflections_Architecture()
     return 0;
 }
 
+// ============================================================================
+// 172. DirectComposition Subsurface Scattering (SSS) & Translucency Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_SubsurfaceScattering_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_SubsurfaceScattering_Architecture")
+
+    PRISMX_ASSERT(prismx::sss::VerifyPrismXMilestone172DirectCompositionSubsurfaceScatteringPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17060,9 +17072,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_DepthOfField_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_AmbientOcclusion_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ScreenSpaceReflections_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_SubsurfaceScattering_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (171/171)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (172/172)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
