@@ -98,3 +98,4 @@
 #include "prismx/directcomposition_stereo3d_pipeline.hpp"
 #include "prismx/directcomposition_super_resolution_pipeline.hpp"
 #include "prismx/directcomposition_holographic_lighting_pipeline.hpp"
+#include "prismx/directcomposition_shadow_depth_pipeline.hpp"
