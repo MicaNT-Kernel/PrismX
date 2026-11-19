@@ -103,3 +103,4 @@
 #include "prismx/directcomposition_motion_blur_pipeline.hpp"
 #include "prismx/directcomposition_dof_bokeh_pipeline.hpp"
 #include "prismx/directcomposition_ssao_hbao_pipeline.hpp"
+#include "prismx/directcomposition_screen_space_reflections_pipeline.hpp"
