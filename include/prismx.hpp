@@ -82,3 +82,4 @@
 #include "prismx/directcomposition_virtual_surface_tiling_pipeline.hpp"
 #include "prismx/directcomposition_glass_acrylic_brush_pipeline.hpp"
 #include "prismx/directcomposition_clip_geometry_mask_pipeline.hpp"
+#include "prismx/directcomposition_video_swapchain_hdr10_pipeline.hpp"
