@@ -16787,6 +16787,18 @@ int Test_PrismX_Official_DirectComposition_Stereo3D_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 164. DirectComposition Super-Resolution & Spatial Upscaling Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_SuperResolution_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_SuperResolution_Architecture")
+
+    PRISMX_ASSERT(prismx::super_resolution::VerifyPrismXMilestone164DirectCompositionSuperResolutionPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16956,9 +16968,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_AlphaLayeredWindow_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_VrrCadence_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_Stereo3D_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_SuperResolution_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (163/163)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (164/164)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
