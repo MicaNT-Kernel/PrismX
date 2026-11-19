@@ -89,3 +89,4 @@
 #include "prismx/directcomposition_surface_factory_interop_pipeline.hpp"
 #include "prismx/directcomposition_hardware_cursor_overlay_pipeline.hpp"
 #include "prismx/directcomposition_desktop_duplication_pipeline.hpp"
+#include "prismx/directcomposition_debug_telemetry_pipeline.hpp"
