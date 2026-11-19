@@ -86,3 +86,4 @@
 #include "prismx/directcomposition_multimonitor_topology_pipeline.hpp"
 #include "prismx/directcomposition_occlusion_damage_pipeline.hpp"
 #include "prismx/directcomposition_color_management_pipeline.hpp"
+#include "prismx/directcomposition_surface_factory_interop_pipeline.hpp"
