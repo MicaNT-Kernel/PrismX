@@ -16679,6 +16679,18 @@ int Test_PrismX_Official_DirectComposition_SurfaceFactory_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 155. DirectComposition Hardware Cursor Overlay & 8000Hz Plane Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_HardwareCursor_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_HardwareCursor_Architecture")
+
+    PRISMX_ASSERT(prismx::hardware_cursor::VerifyMilestone155DirectCompositionHardwareCursorPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -16839,9 +16851,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_OcclusionDamage_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ColorManagement_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_SurfaceFactory_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_HardwareCursor_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (154/154)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (155/155)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
