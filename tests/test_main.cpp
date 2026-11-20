@@ -17003,6 +17003,19 @@ int Test_PrismX_Official_DirectComposition_ClothDynamics_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 182. DirectComposition Rigid Body Dynamics, Continuous Collision Detection (CCD)
+//      & Impulse-Based Multi-Contact Manifold Physics Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_RigidBody_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_RigidBody_Architecture")
+
+    PRISMX_ASSERT(prismx::physics::VerifyPrismXMilestone182DirectCompositionRigidBodyPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17190,9 +17203,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_FluidSimulation_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ElasticSoftBody_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ClothDynamics_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_RigidBody_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (181/181)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (182/182)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
