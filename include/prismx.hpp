@@ -110,3 +110,4 @@
 #include "prismx/directcomposition_caustics_refraction_pipeline.hpp"
 #include "prismx/directcomposition_particle_system_pipeline.hpp"
 #include "prismx/directcomposition_volumetric_cloud_pipeline.hpp"
+#include "prismx/directcomposition_thin_film_iridescence_pipeline.hpp"
