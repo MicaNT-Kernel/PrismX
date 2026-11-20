@@ -16979,6 +16979,18 @@ int Test_PrismX_Official_DirectComposition_FluidSimulation_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 180. DirectComposition Elastic Soft-Body Deformation, Mass-Spring Lattice & Corotational FEM Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_ElasticSoftBody_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_ElasticSoftBody_Architecture")
+
+    PRISMX_ASSERT(prismx::elastic::VerifyPrismXMilestone180DirectCompositionElasticPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17164,9 +17176,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_VolumetricCloud_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ThinFilmIridescence_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_FluidSimulation_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_ElasticSoftBody_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (179/179)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (180/180)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
