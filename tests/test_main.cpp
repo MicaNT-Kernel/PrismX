@@ -16919,6 +16919,18 @@ int Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 175. DirectComposition Dynamic Screen-Space Volumetric Caustics & Water Wave Refraction Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_CausticsRefraction_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_CausticsRefraction_Architecture")
+
+    PRISMX_ASSERT(prismx::caustics::VerifyPrismXMilestone175DirectCompositionCausticsPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17099,9 +17111,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_SubsurfaceScattering_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_AtmosphericFog_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_CausticsRefraction_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (174/174)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (175/175)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

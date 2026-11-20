@@ -107,3 +107,4 @@
 #include "prismx/directcomposition_subsurface_scattering_pipeline.hpp"
 #include "prismx/directcomposition_atmospheric_fog_pipeline.hpp"
 #include "prismx/directcomposition_ssgi_radiosity_pipeline.hpp"
+#include "prismx/directcomposition_caustics_refraction_pipeline.hpp"
