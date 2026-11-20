@@ -16967,6 +16967,18 @@ int Test_PrismX_Official_DirectComposition_ThinFilmIridescence_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 179. DirectComposition Fluid Simulation, Eulerian Grid & Shallow Water Equations Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_FluidSimulation_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_FluidSimulation_Architecture")
+
+    PRISMX_ASSERT(prismx::fluid::VerifyPrismXMilestone179DirectCompositionFluidPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17151,9 +17163,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_ParticleSystem_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_VolumetricCloud_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ThinFilmIridescence_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_FluidSimulation_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (178/178)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (179/179)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

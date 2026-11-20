@@ -111,3 +111,4 @@
 #include "prismx/directcomposition_particle_system_pipeline.hpp"
 #include "prismx/directcomposition_volumetric_cloud_pipeline.hpp"
 #include "prismx/directcomposition_thin_film_iridescence_pipeline.hpp"
+#include "prismx/directcomposition_fluid_simulation_pipeline.hpp"
