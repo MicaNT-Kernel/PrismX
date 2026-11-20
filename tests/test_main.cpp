@@ -16907,6 +16907,18 @@ int Test_PrismX_Official_DirectComposition_AtmosphericFog_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 174. DirectComposition Screen-Space Global Illumination (SSGI) & Radiosity Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture")
+
+    PRISMX_ASSERT(prismx::ssgi::VerifyPrismXMilestone174DirectCompositionSSGIPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17086,9 +17098,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_ScreenSpaceReflections_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_SubsurfaceScattering_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_AtmosphericFog_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (173/173)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (174/174)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
