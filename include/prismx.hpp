@@ -109,3 +109,4 @@
 #include "prismx/directcomposition_ssgi_radiosity_pipeline.hpp"
 #include "prismx/directcomposition_caustics_refraction_pipeline.hpp"
 #include "prismx/directcomposition_particle_system_pipeline.hpp"
+#include "prismx/directcomposition_volumetric_cloud_pipeline.hpp"

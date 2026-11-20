@@ -16943,6 +16943,18 @@ int Test_PrismX_Official_DirectComposition_ParticleSystem_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 177. DirectComposition Volumetric Cloud Deck & Atmospheric Nebula Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_VolumetricCloud_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_VolumetricCloud_Architecture")
+
+    PRISMX_ASSERT(prismx::clouds::VerifyPrismXMilestone177DirectCompositionCloudPipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17125,9 +17137,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_CausticsRefraction_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_ParticleSystem_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_VolumetricCloud_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (176/176)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (177/177)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {
