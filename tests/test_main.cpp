@@ -16931,6 +16931,18 @@ int Test_PrismX_Official_DirectComposition_CausticsRefraction_Architecture() {
     return 0;
 }
 
+// ============================================================================
+// 176. DirectComposition Dynamic GPU Particle System & Curl Noise Fluid Flow Pipeline
+// ============================================================================
+int Test_PrismX_Official_DirectComposition_ParticleSystem_Architecture() {
+    PRISMX_TEST("Test_PrismX_Official_DirectComposition_ParticleSystem_Architecture")
+
+    PRISMX_ASSERT(prismx::particles::VerifyPrismXMilestone176DirectCompositionParticlePipeline() == true);
+
+    PRISMX_PASS()
+    return 0;
+}
+
 int main() {
     try {
         std::cout << "========================================================\n";
@@ -17112,9 +17124,10 @@ int main() {
     if (Test_PrismX_Official_DirectComposition_AtmosphericFog_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_GlobalIllumination_Architecture() != 0) return 1;
     if (Test_PrismX_Official_DirectComposition_CausticsRefraction_Architecture() != 0) return 1;
+    if (Test_PrismX_Official_DirectComposition_ParticleSystem_Architecture() != 0) return 1;
 
     std::cout << "========================================================\n";
-    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (175/175)  \n";
+    std::cout << " ALL PRISMX GRAPHICS SUBSYSTEM TESTS PASSED! (176/176)  \n";
     std::cout << "========================================================\n";
     return 0;
     } catch (const std::exception& e) {

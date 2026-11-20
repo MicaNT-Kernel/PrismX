@@ -108,3 +108,4 @@
 #include "prismx/directcomposition_atmospheric_fog_pipeline.hpp"
 #include "prismx/directcomposition_ssgi_radiosity_pipeline.hpp"
 #include "prismx/directcomposition_caustics_refraction_pipeline.hpp"
+#include "prismx/directcomposition_particle_system_pipeline.hpp"
