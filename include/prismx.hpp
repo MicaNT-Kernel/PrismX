@@ -113,3 +113,4 @@
 #include "prismx/directcomposition_thin_film_iridescence_pipeline.hpp"
 #include "prismx/directcomposition_fluid_simulation_pipeline.hpp"
 #include "prismx/directcomposition_elastic_soft_body_pipeline.hpp"
+#include "prismx/directcomposition_cloth_dynamics_pipeline.hpp"
